@@ -1,0 +1,20 @@
+# Build artifacts
+dist/
+*.zip
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS files
+.DS_Store
+._*
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# PHPUnit
+.phpunit.result.cache
