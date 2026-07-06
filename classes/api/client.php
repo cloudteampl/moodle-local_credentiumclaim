@@ -249,7 +249,7 @@ class client {
      * @param string $url Fully-qualified URL.
      * @param string[] $headers Request headers.
      * @param string|null $body Raw request body.
-     * @return array{0:int,1:string|false,2:array} [http_code, response_body, curl_info]
+     * @return array Numeric array: [int http_code, string|false response_body, array curl_info].
      */
     protected function raw_request(string $method, string $url, array $headers, ?string $body): array {
         global $CFG;

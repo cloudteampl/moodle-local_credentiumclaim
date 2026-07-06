@@ -26,6 +26,11 @@ defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname'] = 'Credentium Claim';
 
+// Capabilities.
+$string['credentiumclaim:claim'] = 'Claim own Credentium credentials';
+$string['credentiumclaim:manage'] = 'Manage Credentium Claim settings';
+$string['credentiumclaim:viewreports'] = 'View Credentium Claim status reports';
+
 // Settings.
 $string['globalsettings'] = 'Credentium Claim settings';
 $string['settings_desc'] = 'Configure how learners are notified about issued-but-unclaimed Credentium digital credentials. This plugin reads issuance records created by the Credentium (local_credentium) plugin and lets learners claim their credentials.';

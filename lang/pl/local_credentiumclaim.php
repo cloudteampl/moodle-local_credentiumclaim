@@ -26,6 +26,11 @@ defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname'] = 'Credentium Claim';
 
+// Capabilities.
+$string['credentiumclaim:claim'] = 'Odbieranie własnych poświadczeń Credentium';
+$string['credentiumclaim:manage'] = 'Zarządzanie ustawieniami Credentium Claim';
+$string['credentiumclaim:viewreports'] = 'Przeglądanie raportów statusu Credentium Claim';
+
 // Settings.
 $string['globalsettings'] = 'Ustawienia Credentium Claim';
 $string['settings_desc'] = 'Skonfiguruj sposób informowania uczestników o wystawionych, lecz nieodebranych poświadczeniach cyfrowych Credentium. Wtyczka odczytuje rekordy wystawień utworzone przez wtyczkę Credentium (local_credentium) i umożliwia uczestnikom odebranie ich poświadczeń.';
