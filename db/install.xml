@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/credentiumclaim/db" VERSION="20260706" COMMENT="XMLDB file for Moodle local/credentiumclaim"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="local_credentiumclaim_status" COMMENT="Tracks the claim status of issued Credentium credentials per user.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The Moodle user the credential belongs to."/>
+        <FIELD NAME="credentialkey" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Credentium issueRequestId used for status and claim-link calls."/>
+        <FIELD NAME="issuanceid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Source local_credentium_issuances.id for traceability (nullable)."/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Course the credential was issued for (nullable)."/>
+        <FIELD NAME="remotestatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="processing" SEQUENCE="false" COMMENT="Last known Credentium status: processing, issued, claimed, failed, unknown."/>
+        <FIELD NAME="dismissed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the user dismissed or acted on the banner for this credential."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timechecked" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Timestamp of the last remote status poll."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+        <KEY NAME="useridcredentialkey" TYPE="unique" FIELDS="userid, credentialkey" COMMENT="One tracking row per user per credential."/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="credentialkey" UNIQUE="false" FIELDS="credentialkey"/>
+        <INDEX NAME="remotestatus" UNIQUE="false" FIELDS="remotestatus"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
