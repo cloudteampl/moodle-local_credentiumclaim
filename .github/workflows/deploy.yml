@@ -1,0 +1,100 @@
+name: Build and Release Credentium Claim Plugin
+
+# Cutting a release is a deliberate, separate act from day-to-day development:
+# push a tag `vX.Y.Z` and this workflow builds the installable ZIP, generates
+# checksums, and publishes a GitHub Release that clients can download.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Plugin Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read release from version.php
+        id: version
+        run: |
+          RELEASE=$(grep '^\$plugin->release' version.php | sed -E "s/.*'(.*)'.*/\1/")
+          if [ -z "$RELEASE" ]; then
+            echo "::error::Could not read \$plugin->release from version.php"
+            exit 1
+          fi
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "Plugin release: $RELEASE"
+
+      - name: Verify tag matches version.php
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE: ${{ steps.version.outputs.release }}
+          REF: ${{ github.ref }}
+        run: |
+          TAG="${REF#refs/tags/v}"
+          if [ "$TAG" != "$RELEASE" ]; then
+            echo "::error::Tag v$TAG does not match \$plugin->release '$RELEASE' in version.php. Bump version.php and re-tag."
+            exit 1
+          fi
+          echo "Tag v$TAG matches version.php ($RELEASE) ✓"
+
+      - name: Build deployment package
+        run: |
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: credentiumclaim-plugin-${{ steps.version.outputs.release }}
+          path: |
+            dist/*.zip
+            dist/*.sha256
+            dist/*.md5
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.sha256
+            dist/*.md5
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Credentium Claim Moodle Plugin v${{ steps.version.outputs.release }}
+
+            **Copyright © 2025 CloudTeam Sp. z o.o.**
+
+            ### Installation
+
+            1. Download the ZIP file below.
+            2. In Moodle: Site Administration > Plugins > Install plugins > upload the ZIP.
+            3. Or extract it to `{moodle_root}/local/credentiumclaim/`.
+            4. Visit Site Administration > Notifications to complete installation.
+
+            Requires the `local_credentium` plugin.
+
+            ### Checksums
+
+            Verify file integrity using the SHA256 or MD5 checksum files provided below.
+
+            ### License
+
+            GNU GPL v3 or later.
+
+            ---
+
+            Credentium® is a registered trademark.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
