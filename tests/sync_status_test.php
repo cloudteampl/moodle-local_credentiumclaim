@@ -100,6 +100,8 @@ final class sync_status_test extends \advanced_testcase {
             private array $statusmap;
 
             /**
+             * Configure the client double with a canned status map.
+             *
              * @param string $url Base URL.
              * @param string $key API key.
              * @param array $statusmap Map of issueRequestId to status string.
