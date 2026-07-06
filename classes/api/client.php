@@ -105,7 +105,14 @@ class client {
         $ids = array_values(array_unique(array_filter(array_map('strval', $issuerequestids), 'strlen')));
         $result = [];
         foreach (array_chunk($ids, self::BATCH_MAX) as $chunk) {
-            $response = $this->request('POST', self::PATH_STATUS, [], ['issueRequestIds' => $chunk]);
+            try {
+                $response = $this->request('POST', self::PATH_STATUS, [], ['issueRequestIds' => $chunk]);
+            } catch (\moodle_exception $e) {
+                // Isolate the failure: keep results already gathered and poll the remaining chunks.
+                require_once(__DIR__ . '/../../lib.php');
+                local_credentiumclaim_log('Batch status chunk failed', ['size' => count($chunk)]);
+                continue;
+            }
             if (!is_object($response) || !isset($response->results) || !is_array($response->results)) {
                 continue;
             }

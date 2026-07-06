@@ -39,21 +39,22 @@ $PAGE->set_title(get_string('testconnection_heading', 'local_credentiumclaim'));
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('testconnection_heading', 'local_credentiumclaim'));
 
-$client = new client();
-if (!$client->is_configured()) {
-    echo $OUTPUT->notification(get_string('testconnection_disabled', 'local_credentiumclaim'),
-        \core\output\notification::NOTIFY_WARNING);
-} else {
-    try {
+try {
+    $client = new client();
+    if (!$client->is_configured()) {
+        echo $OUTPUT->notification(get_string('testconnection_disabled', 'local_credentiumclaim'),
+            \core\output\notification::NOTIFY_WARNING);
+    } else {
         $templates = $client->get_templates();
         echo $OUTPUT->notification(get_string('testconnection_success', 'local_credentiumclaim'),
             \core\output\notification::NOTIFY_SUCCESS);
         echo html_writer::tag('p',
             get_string('testconnection_templatecount', 'local_credentiumclaim', count($templates)));
-    } catch (moodle_exception $e) {
-        echo $OUTPUT->notification(get_string('testconnection_fail', 'local_credentiumclaim'),
-            \core\output\notification::NOTIFY_ERROR);
     }
+} catch (moodle_exception $e) {
+    // Covers both a bad stored URL (constructor) and an API/auth failure.
+    echo $OUTPUT->notification(get_string('testconnection_fail', 'local_credentiumclaim'),
+        \core\output\notification::NOTIFY_ERROR);
 }
 
 echo html_writer::div(

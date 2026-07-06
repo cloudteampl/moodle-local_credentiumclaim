@@ -53,44 +53,50 @@ if ($row === null) {
 $message = null;
 $messagetype = \core\output\notification::NOTIFY_INFO;
 
-$client = new client();
-if (!$client->is_configured()) {
+if (!local_credentiumclaim_is_enabled()) {
+    // Honour the master kill-switch even if API credentials remain configured.
     $message = get_string('claim_error', 'local_credentiumclaim');
     $messagetype = \core\output\notification::NOTIFY_ERROR;
 } else {
-    $locale = (substr(current_language(), 0, 2) === 'pl') ? 'pl' : 'en';
     try {
-        $result = $client->get_claim_link($row->credentialkey, $locale);
-        switch ($result->actiontype) {
-            case client::ACTION_CREATE:
-            case client::ACTION_LOGIN:
-                if (!empty($result->claimurl)) {
-                    // The user has acted on this credential: stop nagging via the banner.
-                    claimable::dismiss($USER->id, (int) $row->id);
-                    // Hand the single-use URL straight to the browser; never render or log it.
-                    redirect($result->claimurl);
-                }
-                $message = get_string('claim_error', 'local_credentiumclaim');
-                $messagetype = \core\output\notification::NOTIFY_ERROR;
-                break;
+        $client = new client();
+        if (!$client->is_configured()) {
+            $message = get_string('claim_error', 'local_credentiumclaim');
+            $messagetype = \core\output\notification::NOTIFY_ERROR;
+        } else {
+            $locale = (substr(current_language(), 0, 2) === 'pl') ? 'pl' : 'en';
+            $result = $client->get_claim_link($row->credentialkey, $locale);
+            switch ($result->actiontype) {
+                case client::ACTION_CREATE:
+                case client::ACTION_LOGIN:
+                    if (!empty($result->claimurl)) {
+                        // The user has acted on this credential: stop nagging via the banner.
+                        claimable::dismiss($USER->id, (int) $row->id);
+                        // Hand the single-use URL straight to the browser; never render or log it.
+                        redirect($result->claimurl);
+                    }
+                    $message = get_string('claim_error', 'local_credentiumclaim');
+                    $messagetype = \core\output\notification::NOTIFY_ERROR;
+                    break;
 
-            case client::ACTION_ALREADY:
-                claimable::mark_claimed($USER->id, (int) $row->id);
-                $message = get_string('claim_alreadyclaimed', 'local_credentiumclaim');
-                $messagetype = \core\output\notification::NOTIFY_SUCCESS;
-                break;
+                case client::ACTION_ALREADY:
+                    claimable::mark_claimed($USER->id, (int) $row->id);
+                    $message = get_string('claim_alreadyclaimed', 'local_credentiumclaim');
+                    $messagetype = \core\output\notification::NOTIFY_SUCCESS;
+                    break;
 
-            case client::ACTION_NOTREADY:
-                $message = get_string('claim_notready', 'local_credentiumclaim');
-                $messagetype = \core\output\notification::NOTIFY_INFO;
-                break;
+                case client::ACTION_NOTREADY:
+                    $message = get_string('claim_notready', 'local_credentiumclaim');
+                    $messagetype = \core\output\notification::NOTIFY_INFO;
+                    break;
 
-            default:
-                $message = get_string('claim_error', 'local_credentiumclaim');
-                $messagetype = \core\output\notification::NOTIFY_WARNING;
+                default:
+                    $message = get_string('claim_error', 'local_credentiumclaim');
+                    $messagetype = \core\output\notification::NOTIFY_WARNING;
+            }
         }
     } catch (moodle_exception $e) {
-        // The client has already logged a sanitised summary.
+        // The client already logged a sanitised summary; show a generic message.
         $message = get_string('claim_error', 'local_credentiumclaim');
         $messagetype = \core\output\notification::NOTIFY_ERROR;
     }

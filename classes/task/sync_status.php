@@ -34,6 +34,9 @@ defined('MOODLE_INTERNAL') || die();
  */
 class sync_status extends \core\task\scheduled_task {
 
+    /** @var int Max rows discovered/polled per run (bounds cron time and third-party API load). */
+    protected const MAX_PER_RUN = 1000;
+
     /** @var client|null Injected client (for tests). */
     protected $client = null;
 
@@ -95,7 +98,7 @@ class sync_status extends \core\task\scheduled_task {
      */
     protected function discover(): void {
         $new = 0;
-        foreach ($this->fetch_source_issuances() as $issuance) {
+        foreach ($this->fetch_source_issuances(self::MAX_PER_RUN) as $issuance) {
             $courseid = isset($issuance->courseid) && $issuance->courseid !== null ? (int) $issuance->courseid : null;
             if (claimable::record_candidate(
                 (int) $issuance->userid,
@@ -115,21 +118,29 @@ class sync_status extends \core\task\scheduled_task {
      * Isolated as its own method so tests can supply source data without depending
      * on the sibling plugin's schema.
      *
+     * @param int $limit Maximum rows to return this run.
      * @return \stdClass[] Rows with id, userid, courseid, credentialid.
      */
-    protected function fetch_source_issuances(): array {
+    protected function fetch_source_issuances(int $limit): array {
         global $DB;
         if (!$DB->get_manager()->table_exists('local_credentium_issuances')) {
             mtrace('local_credentium issuances table not found; skipping discovery.');
             return [];
         }
-        return $DB->get_records_select(
-            'local_credentium_issuances',
-            "status = :status AND credentialid IS NOT NULL AND credentialid <> ''",
-            ['status' => 'issued'],
-            'id ASC',
-            'id, userid, courseid, credentialid'
-        );
+        // Only fetch issued credentials we are not already tracking, bounded per run.
+        // A single indexed anti-join replaces one record_exists() round-trip per source row.
+        $sql = "SELECT i.id, i.userid, i.courseid, i.credentialid
+                  FROM {local_credentium_issuances} i
+                 WHERE i.status = :status
+                   AND i.credentialid IS NOT NULL
+                   AND i.credentialid <> :empty
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM {local_credentiumclaim_status} s
+                        WHERE s.userid = i.userid
+                          AND s.credentialkey = i.credentialid)
+              ORDER BY i.id ASC";
+        return $DB->get_records_sql($sql, ['status' => 'issued', 'empty' => ''], 0, $limit);
     }
 
     /**
@@ -139,7 +150,7 @@ class sync_status extends \core\task\scheduled_task {
      * @return void
      */
     protected function poll(client $client): void {
-        $rows = claimable::get_pollable();
+        $rows = claimable::get_pollable(self::MAX_PER_RUN);
         if (empty($rows)) {
             mtrace('No credentials pending a status check.');
             return;

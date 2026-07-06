@@ -26,17 +26,6 @@ defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
 
-    // Manage global Credentium Claim settings.
-    'local/credentiumclaim:manage' => [
-        'riskbitmask' => RISK_CONFIG,
-        'captype' => 'write',
-        'contextlevel' => CONTEXT_SYSTEM,
-        'archetypes' => [
-            'manager' => CAP_ALLOW,
-        ],
-        'clonepermissionsfrom' => 'moodle/site:config',
-    ],
-
     // Claim own Credentium credentials (see the banner and the "My credentials" page).
     // Granted to all authenticated users by default.
     'local/credentiumclaim:claim' => [

@@ -28,7 +28,6 @@ $string['pluginname'] = 'Credentium Claim';
 
 // Capabilities.
 $string['credentiumclaim:claim'] = 'Odbieranie własnych poświadczeń Credentium';
-$string['credentiumclaim:manage'] = 'Zarządzanie ustawieniami Credentium Claim';
 $string['credentiumclaim:viewreports'] = 'Przeglądanie raportów statusu Credentium Claim';
 
 // Settings.

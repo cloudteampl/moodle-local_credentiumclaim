@@ -122,8 +122,8 @@ final class sync_status_test extends \advanced_testcase {
             /** @var \stdClass[] */
             public array $source = [];
 
-            protected function fetch_source_issuances(): array {
-                return $this->source;
+            protected function fetch_source_issuances(int $limit): array {
+                return array_slice($this->source, 0, $limit);
             }
         };
         $task->source = $source;
