@@ -99,7 +99,7 @@ class client {
      * Fetch claim/issue status for a set of issue-request ids, in batches of 500.
      *
      * @param string[] $issuerequestids Credentium issueRequestId values.
-     * @return array<string,\stdClass> Map issueRequestId => {status, credentialid, issuedat, claimedat}.
+     * @return array<string, \stdClass> Map issueRequestId => {status, credentialid, issuedat, claimedat}.
      */
     public function get_status_batch(array $issuerequestids): array {
         $ids = array_values(array_unique(array_filter(array_map('strval', $issuerequestids), 'strlen')));

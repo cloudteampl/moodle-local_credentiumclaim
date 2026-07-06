@@ -51,7 +51,6 @@ $string['testconnection_disabled'] = 'Przed testem połączenia zapisz adres URL
 $string['testconnection_success'] = 'Połączenie udane. API Credentium odpowiedziało, a klucz API jest prawidłowy.';
 $string['testconnection_templatecount'] = 'API zwróciło szablonów poświadczeń: {$a}.';
 $string['testconnection_fail'] = 'Połączenie nieudane. Sprawdź adres URL API oraz klucz API.';
-$string['backtosettings'] = 'Powrót do ustawień';
 
 // Report.
 $string['report'] = 'Status Credentium Claim';
@@ -78,15 +77,11 @@ $string['col_course'] = 'Kurs';
 $string['col_status'] = 'Status';
 $string['col_action'] = 'Akcja';
 $string['claim'] = 'Odbierz';
-$string['dismiss'] = 'Odrzuć';
 
 // Claim flow.
 $string['claim_heading'] = 'Odbierz swoje poświadczenie';
-$string['claim_opening'] = 'Otwieranie Credentium, abyś mógł(-mogła) odebrać swoje poświadczenie…';
-$string['claim_manuallink'] = 'Jeśli nic się nie dzieje, użyj tego linku, aby odebrać poświadczenie.';
 $string['claim_alreadyclaimed'] = 'To poświadczenie zostało już przez Ciebie odebrane. Jest dostępne w Twoim Portfelu Credentium.';
 $string['claim_notready'] = 'To poświadczenie jest jeszcze przygotowywane. Spróbuj ponownie za kilka minut.';
-$string['claim_paused'] = 'Odbieranie poświadczeń jest chwilowo niedostępne. Spróbuj ponownie później.';
 $string['claim_error'] = 'Nie udało się teraz otworzyć linku do odbioru. Spróbuj ponownie później.';
 $string['claim_backtolist'] = 'Powrót do moich poświadczeń';
 
@@ -113,7 +108,6 @@ $string['error:apinotconfigured'] = 'API Credentium nie jest skonfigurowane.';
 $string['apierror'] = 'API Credentium zwróciło błąd.';
 $string['error:invalidjsonresponse'] = 'API Credentium zwróciło nieprawidłową odpowiedź.';
 $string['error:credentialnotfound'] = 'Nie znaleziono żądanego poświadczenia.';
-$string['error:notyours'] = 'Nie masz uprawnień do odebrania tego poświadczenia.';
 
 // Privacy.
 $string['privacy:metadata:local_credentiumclaim_status'] = 'Informacje śledzące o wystawionych poświadczeniach Credentium oraz o tym, czy uczestnik je odebrał.';

@@ -51,7 +51,6 @@ $string['testconnection_disabled'] = 'Please save the API URL and API key before
 $string['testconnection_success'] = 'Connection successful. The Credentium API responded and the API key is valid.';
 $string['testconnection_templatecount'] = 'The API returned {$a} credential template(s).';
 $string['testconnection_fail'] = 'Connection failed. Please check the API URL and API key.';
-$string['backtosettings'] = 'Back to settings';
 
 // Report.
 $string['report'] = 'Credentium Claim status';
@@ -78,15 +77,11 @@ $string['col_course'] = 'Course';
 $string['col_status'] = 'Status';
 $string['col_action'] = 'Action';
 $string['claim'] = 'Claim';
-$string['dismiss'] = 'Dismiss';
 
 // Claim flow.
 $string['claim_heading'] = 'Claim your credential';
-$string['claim_opening'] = 'Opening Credentium so you can claim your credential…';
-$string['claim_manuallink'] = 'If nothing happens, use this link to claim your credential.';
 $string['claim_alreadyclaimed'] = 'You have already claimed this credential. It is available in your Credentium Wallet.';
 $string['claim_notready'] = 'This credential is still being prepared. Please try again in a few minutes.';
-$string['claim_paused'] = 'Credential claiming is temporarily unavailable. Please try again later.';
 $string['claim_error'] = 'We could not open the claim link right now. Please try again later.';
 $string['claim_backtolist'] = 'Back to my credentials';
 
@@ -113,7 +108,6 @@ $string['error:apinotconfigured'] = 'The Credentium API is not configured.';
 $string['apierror'] = 'The Credentium API returned an error.';
 $string['error:invalidjsonresponse'] = 'The Credentium API returned an invalid response.';
 $string['error:credentialnotfound'] = 'The requested credential could not be found.';
-$string['error:notyours'] = 'You do not have permission to claim this credential.';
 
 // Privacy.
 $string['privacy:metadata:local_credentiumclaim_status'] = 'Tracking information about issued Credentium credentials and whether the learner has claimed them.';

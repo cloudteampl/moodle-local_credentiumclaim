@@ -92,13 +92,13 @@ final class sync_status_test extends \advanced_testcase {
      * Build a sync task with canned source issuances and a canned status map.
      *
      * @param \stdClass[] $source Fake source issuances.
-     * @param array<string,string> $statusmap issueRequestId => status.
+     * @param array<string, string> $statusmap issueRequestId => status.
      * @return \local_credentiumclaim\task\sync_status
      */
     private function make_task(array $source, array $statusmap) {
         $client = new class('https://api.example.com', 'pub.key', $statusmap)
             extends \local_credentiumclaim\api\client {
-            /** @var array<string,string> */
+            /** @var array<string, string> */
             private array $statusmap;
 
             public function __construct($url, $key, array $statusmap) {

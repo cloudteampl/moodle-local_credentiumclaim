@@ -19,9 +19,8 @@
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
         <KEY NAME="courseid" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
-        <KEY NAME="useridcredentialkey" TYPE="unique" FIELDS="userid, credentialkey" COMMENT="One tracking row per user per credential."/>
+        <KEY NAME="useridcredentialkey" TYPE="unique" FIELDS="userid, credentialkey" COMMENT="One tracking row per user per credential; also indexes userid."/>
       </KEYS>
       <INDEXES>
         <INDEX NAME="credentialkey" UNIQUE="false" FIELDS="credentialkey"/>
