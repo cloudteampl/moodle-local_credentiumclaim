@@ -22,13 +22,11 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Log a diagnostic message when debug logging is enabled.
  *
- * Uses error_log to keep output off the page. Callers must never pass secrets
- * (API keys, claim URLs) — sanitise first via the API client.
+ * Emits through Moodle's developer debugging channel. Callers must never pass
+ * secrets (API keys, claim URLs) — sanitise first via the API client.
  *
  * @param string $message The message to log.
  * @param mixed $data Optional structured data (JSON-encoded).
@@ -42,7 +40,7 @@ function local_credentiumclaim_log($message, $data = null) {
     if ($data !== null) {
         $logmessage .= ' | Data: ' . json_encode($data);
     }
-    error_log($logmessage);
+    debugging($logmessage, DEBUG_DEVELOPER);
 }
 
 /**

@@ -33,15 +33,18 @@ require_once($CFG->libdir . '/formslib.php');
  * Admin settings form.
  */
 class admin_settings_form extends \moodleform {
-
     /**
      * Form definition.
      */
     public function definition() {
         $mform = $this->_form;
 
-        $mform->addElement('static', 'intro', '',
-            '<div class="alert alert-info">' . get_string('settings_desc', 'local_credentiumclaim') . '</div>');
+        $mform->addElement(
+            'static',
+            'intro',
+            '',
+            '<div class="alert alert-info">' . get_string('settings_desc', 'local_credentiumclaim') . '</div>'
+        );
 
         // Master switch.
         $mform->addElement('checkbox', 'enabled', get_string('enabled', 'local_credentiumclaim'));
@@ -68,8 +71,12 @@ class admin_settings_form extends \moodleform {
         } else {
             $onclick = 'alert(' . json_encode(get_string('testconnection_disabled', 'local_credentiumclaim')) . '); return false;';
         }
-        $mform->addElement('button', 'testconnection', get_string('testconnection', 'local_credentiumclaim'),
-            ['onclick' => $onclick]);
+        $mform->addElement(
+            'button',
+            'testconnection',
+            get_string('testconnection', 'local_credentiumclaim'),
+            ['onclick' => $onclick]
+        );
         $mform->hideIf('testconnection', 'enabled', 'notchecked');
 
         // Show banner.

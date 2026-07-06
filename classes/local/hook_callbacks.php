@@ -24,13 +24,10 @@
 
 namespace local_credentiumclaim\local;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Output hook callbacks.
  */
 class hook_callbacks {
-
     /**
      * Inject the "unclaimed credential" reminder banner at the top of the page body.
      *

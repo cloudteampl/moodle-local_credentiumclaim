@@ -30,7 +30,6 @@ namespace local_credentiumclaim;
  * @covers \local_credentiumclaim\api\client
  */
 final class client_test extends \advanced_testcase {
-
     /**
      * Build a client whose transport is captured in memory instead of hitting the network.
      *
@@ -38,12 +37,21 @@ final class client_test extends \advanced_testcase {
      * @return \local_credentiumclaim\api\client Anonymous subclass exposing $requests and $handler.
      */
     private function make_client(string $apikey = 'pub.secretkey') {
-        return new class('https://api.example.com', $apikey) extends \local_credentiumclaim\api\client {
+        return new class ('https://api.example.com', $apikey) extends \local_credentiumclaim\api\client {
             /** @var array[] Captured requests. */
             public array $requests = [];
-            /** @var callable|null Optional responder: fn($method,$url,$body):array. */
+            /** @var callable|null Optional responder taking method, url and body. */
             public $handler = null;
 
+            /**
+             * Capture the request and return a canned or handler-provided response.
+             *
+             * @param string $method HTTP method.
+             * @param string $url Request URL.
+             * @param string[] $headers Request headers.
+             * @param string|null $body Request body.
+             * @return array [http_code, response_body, curl_info]
+             */
             protected function raw_request(string $method, string $url, array $headers, ?string $body): array {
                 $this->requests[] = ['method' => $method, 'url' => $url, 'headers' => $headers, 'body' => $body];
                 if ($this->handler !== null) {

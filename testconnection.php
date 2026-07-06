@@ -42,25 +42,27 @@ echo $OUTPUT->heading(get_string('testconnection_heading', 'local_credentiumclai
 try {
     $client = new client();
     if (!$client->is_configured()) {
-        echo $OUTPUT->notification(get_string('testconnection_disabled', 'local_credentiumclaim'),
-            \core\output\notification::NOTIFY_WARNING);
+        echo $OUTPUT->notification(
+            get_string('testconnection_disabled', 'local_credentiumclaim'),
+            \core\output\notification::NOTIFY_WARNING
+        );
     } else {
         $templates = $client->get_templates();
-        echo $OUTPUT->notification(get_string('testconnection_success', 'local_credentiumclaim'),
-            \core\output\notification::NOTIFY_SUCCESS);
-        echo html_writer::tag('p',
-            get_string('testconnection_templatecount', 'local_credentiumclaim', count($templates)));
+        echo $OUTPUT->notification(
+            get_string('testconnection_success', 'local_credentiumclaim'),
+            \core\output\notification::NOTIFY_SUCCESS
+        );
+        echo html_writer::tag(
+            'p',
+            get_string('testconnection_templatecount', 'local_credentiumclaim', count($templates))
+        );
     }
 } catch (moodle_exception $e) {
     // Covers both a bad stored URL (constructor) and an API/auth failure.
-    echo $OUTPUT->notification(get_string('testconnection_fail', 'local_credentiumclaim'),
-        \core\output\notification::NOTIFY_ERROR);
+    echo $OUTPUT->notification(
+        get_string('testconnection_fail', 'local_credentiumclaim'),
+        \core\output\notification::NOTIFY_ERROR
+    );
 }
-
-echo html_writer::div(
-    html_writer::tag('button', get_string('closewindow'), ['type' => 'button', 'class' => 'btn btn-secondary',
-        'onclick' => 'window.close();']),
-    'mt-3'
-);
 
 echo $OUTPUT->footer();

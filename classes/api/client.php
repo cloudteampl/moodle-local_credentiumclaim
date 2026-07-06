@@ -24,8 +24,6 @@
 
 namespace local_credentiumclaim\api;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Thin HTTP client for the Credentium issuer API (v2 surface).
  *
@@ -34,7 +32,6 @@ defined('MOODLE_INTERNAL') || die();
  * written to logs — see {@see self::sanitize_for_log()}.
  */
 class client {
-
     /** @var string Endpoint: batch status. */
     private const PATH_STATUS = '/api/credential-issue-requests/statuses';
 
@@ -99,7 +96,7 @@ class client {
      * Fetch claim/issue status for a set of issue-request ids, in batches of 500.
      *
      * @param string[] $issuerequestids Credentium issueRequestId values.
-     * @return array<string, \stdClass> Map issueRequestId => {status, credentialid, issuedat, claimedat}.
+     * @return array Keyed by issueRequestId; each value is an object {status, credentialid, issuedat, claimedat}.
      */
     public function get_status_batch(array $issuerequestids): array {
         $ids = array_values(array_unique(array_filter(array_map('strval', $issuerequestids), 'strlen')));

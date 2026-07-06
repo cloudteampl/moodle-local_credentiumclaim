@@ -24,13 +24,10 @@
 
 namespace local_credentiumclaim\output;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * The reminder banner shown to learners with unclaimed credentials.
  */
 class banner implements \renderable, \templatable {
-
     /** @var int Number of unclaimed credentials. */
     protected $count;
 

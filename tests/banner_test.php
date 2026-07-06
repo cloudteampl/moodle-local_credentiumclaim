@@ -30,13 +30,14 @@ namespace local_credentiumclaim;
  * @covers \local_credentiumclaim\output\banner
  */
 final class banner_test extends \advanced_testcase {
-
     public function test_export_for_template_contains_expected_data(): void {
-        global $OUTPUT;
+        global $PAGE;
         $this->resetAfterTest(true);
 
+        // Use a real renderer_base (the early-bootstrap $OUTPUT is not one).
+        $renderer = $PAGE->get_renderer('core');
         $banner = new \local_credentiumclaim\output\banner(3);
-        $data = $banner->export_for_template($OUTPUT);
+        $data = $banner->export_for_template($renderer);
 
         $this->assertArrayHasKey('title', $data);
         $this->assertArrayHasKey('sesskey', $data);

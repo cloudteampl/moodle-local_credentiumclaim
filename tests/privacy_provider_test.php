@@ -37,7 +37,6 @@ use local_credentiumclaim\privacy\provider;
  * @covers \local_credentiumclaim\privacy\provider
  */
 final class privacy_provider_test extends \core_privacy\tests\provider_testcase {
-
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);

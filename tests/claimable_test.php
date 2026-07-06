@@ -32,7 +32,6 @@ use local_credentiumclaim\local\claimable;
  * @covers \local_credentiumclaim\local\claimable
  */
 final class claimable_test extends \advanced_testcase {
-
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);

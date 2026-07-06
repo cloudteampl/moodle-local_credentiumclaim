@@ -26,13 +26,10 @@ namespace local_credentiumclaim\event;
 
 use local_credentiumclaim\local\claimable;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Observers that keep plugin data consistent with core events.
  */
 class observer {
-
     /**
      * Remove a deleted user's tracking rows (GDPR / data hygiene).
      *

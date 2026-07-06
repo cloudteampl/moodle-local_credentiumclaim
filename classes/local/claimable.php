@@ -24,14 +24,11 @@
 
 namespace local_credentiumclaim\local;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Reads and mutates rows in {local_credentiumclaim_status}, with a cached
  * per-user count of banner-worthy (issued, not-dismissed) credentials.
  */
 class claimable {
-
     /** @var string Tracking table. */
     public const TABLE = 'local_credentiumclaim_status';
 

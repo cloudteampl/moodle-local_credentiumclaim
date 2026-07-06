@@ -32,7 +32,6 @@ use local_credentiumclaim\local\claimable;
  * @covers \local_credentiumclaim\task\sync_status
  */
 final class sync_status_test extends \advanced_testcase {
-
     public function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
@@ -53,9 +52,9 @@ final class sync_status_test extends \advanced_testcase {
 
         $this->run_task($task);
 
-        // rq-1 issued => banner-worthy for u1.
+        // Credential rq-1 is issued => banner-worthy for u1.
         $this->assertSame(1, claimable::count_for_user($u1->id));
-        // rq-2 claimed => nothing to claim for u2.
+        // Credential rq-2 is claimed => nothing to claim for u2.
         $this->assertSame(0, claimable::count_for_user($u2->id));
         $this->assertCount(0, claimable::list_for_user($u2->id));
     }
@@ -92,20 +91,33 @@ final class sync_status_test extends \advanced_testcase {
      * Build a sync task with canned source issuances and a canned status map.
      *
      * @param \stdClass[] $source Fake source issuances.
-     * @param array<string, string> $statusmap issueRequestId => status.
+     * @param array $statusmap Map of issueRequestId to status string.
      * @return \local_credentiumclaim\task\sync_status
      */
     private function make_task(array $source, array $statusmap) {
-        $client = new class('https://api.example.com', 'pub.key', $statusmap)
-            extends \local_credentiumclaim\api\client {
-            /** @var array<string, string> */
+        $client = new class ('https://api.example.com', 'pub.key', $statusmap) extends \local_credentiumclaim\api\client {
+            /** @var array Map of issueRequestId to status string. */
             private array $statusmap;
 
+            /**
+             * @param string $url Base URL.
+             * @param string $key API key.
+             * @param array $statusmap Map of issueRequestId to status string.
+             */
             public function __construct($url, $key, array $statusmap) {
                 parent::__construct($url, $key);
                 $this->statusmap = $statusmap;
             }
 
+            /**
+             * Return a canned batch-status response built from the status map.
+             *
+             * @param string $method HTTP method.
+             * @param string $url Request URL.
+             * @param string[] $headers Request headers.
+             * @param string|null $body Request body.
+             * @return array [http_code, response_body, curl_info]
+             */
             protected function raw_request(string $method, string $url, array $headers, ?string $body): array {
                 $ids = json_decode($body)->issueRequestIds;
                 $results = [];
@@ -122,6 +134,12 @@ final class sync_status_test extends \advanced_testcase {
             /** @var \stdClass[] */
             public array $source = [];
 
+            /**
+             * Return the canned source issuances (bounded by the limit).
+             *
+             * @param int $limit Maximum rows.
+             * @return \stdClass[]
+             */
             protected function fetch_source_issuances(int $limit): array {
                 return array_slice($this->source, 0, $limit);
             }

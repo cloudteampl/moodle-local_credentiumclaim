@@ -27,13 +27,10 @@ namespace local_credentiumclaim\task;
 use local_credentiumclaim\api\client;
 use local_credentiumclaim\local\claimable;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Discovers issued credentials from local_credentium and polls Credentium for their claim status.
  */
 class sync_status extends \core\task\scheduled_task {
-
     /** @var int Max rows discovered/polled per run (bounds cron time and third-party API load). */
     protected const MAX_PER_RUN = 1000;
 
@@ -100,12 +97,14 @@ class sync_status extends \core\task\scheduled_task {
         $new = 0;
         foreach ($this->fetch_source_issuances(self::MAX_PER_RUN) as $issuance) {
             $courseid = isset($issuance->courseid) && $issuance->courseid !== null ? (int) $issuance->courseid : null;
-            if (claimable::record_candidate(
+            $issuanceid = isset($issuance->id) ? (int) $issuance->id : null;
+            $tracked = claimable::record_candidate(
                 (int) $issuance->userid,
                 (string) $issuance->credentialid,
-                isset($issuance->id) ? (int) $issuance->id : null,
+                $issuanceid,
                 $courseid
-            )) {
+            );
+            if ($tracked) {
                 $new++;
             }
         }

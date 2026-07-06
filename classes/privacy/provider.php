@@ -32,8 +32,6 @@ use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Privacy provider implementation for local_credentiumclaim.
  */
@@ -41,7 +39,6 @@ class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\core_userlist_provider,
     \core_privacy\local\request\plugin\provider {
-
     /** @var string Tracking table. */
     private const TABLE = 'local_credentiumclaim_status';
 

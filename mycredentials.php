@@ -41,8 +41,10 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('mycredentials_heading', 'local_credentiumclaim'));
 
 if (!local_credentiumclaim_is_enabled()) {
-    echo $OUTPUT->notification(get_string('error:notconfigured', 'local_credentiumclaim'),
-        \core\output\notification::NOTIFY_INFO);
+    echo $OUTPUT->notification(
+        get_string('error:notconfigured', 'local_credentiumclaim'),
+        \core\output\notification::NOTIFY_INFO
+    );
     echo $OUTPUT->footer();
     die();
 }
@@ -50,8 +52,10 @@ if (!local_credentiumclaim_is_enabled()) {
 $rows = claimable::list_for_user($USER->id);
 
 if (empty($rows)) {
-    echo $OUTPUT->notification(get_string('mycredentials_empty', 'local_credentiumclaim'),
-        \core\output\notification::NOTIFY_INFO);
+    echo $OUTPUT->notification(
+        get_string('mycredentials_empty', 'local_credentiumclaim'),
+        \core\output\notification::NOTIFY_INFO
+    );
 } else {
     echo html_writer::tag('p', get_string('mycredentials_intro', 'local_credentiumclaim'));
 
@@ -83,8 +87,11 @@ if (empty($rows)) {
             ]);
             $action .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
             $action .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $row->id]);
-            $action .= html_writer::tag('button', get_string('claim', 'local_credentiumclaim'),
-                ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']);
+            $action .= html_writer::tag(
+                'button',
+                get_string('claim', 'local_credentiumclaim'),
+                ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']
+            );
             $action .= html_writer::end_tag('form');
         } else {
             $action = html_writer::span($statuslabel, 'text-muted');
