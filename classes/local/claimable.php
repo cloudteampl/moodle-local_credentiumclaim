@@ -206,6 +206,26 @@ class claimable {
     }
 
     /**
+     * Suppress the banner for all of a user's currently issued credentials.
+     *
+     * New credentials issued later are not affected, so the banner can return.
+     *
+     * @param int $userid User id.
+     * @return void
+     */
+    public static function dismiss_all(int $userid): void {
+        global $DB;
+        $DB->set_field_select(
+            self::TABLE,
+            'dismissed',
+            1,
+            'userid = :userid AND remotestatus = :status AND dismissed = 0',
+            ['userid' => $userid, 'status' => self::STATUS_ISSUED]
+        );
+        self::purge_cache($userid);
+    }
+
+    /**
      * Mark a credential as claimed locally (e.g. Credentium reported already_claimed).
      *
      * @param int $userid User id.
