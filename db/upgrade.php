@@ -29,6 +29,15 @@
  * @return bool
  */
 function xmldb_local_credentiumclaim_upgrade($oldversion) {
-    // No upgrade steps yet — the initial release ships the schema via db/install.xml.
+    if ($oldversion < 2026072300) {
+        // The plugin no longer keeps its own copy of the Credentium API credentials:
+        // they are inherited from local_credentium. Drop the duplicates so a rotated
+        // key cannot linger here, and so nobody edits a value that is no longer read.
+        unset_config('apiurl', 'local_credentiumclaim');
+        unset_config('apikey', 'local_credentiumclaim');
+
+        upgrade_plugin_savepoint(true, 2026072300, 'local', 'credentiumclaim');
+    }
+
     return true;
 }

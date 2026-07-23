@@ -167,6 +167,108 @@ final class client_test extends \advanced_testcase {
         $this->assertStringContainsString('[REDACTED]', $clean);
     }
 
+    public function test_credentials_are_inherited_from_the_connector_plugin(): void {
+        set_config('apiurl', 'https://issuer.example.com/api', 'local_credentium');
+        set_config('apikey', 'pub.secretkey', 'local_credentium');
+
+        $client = new \local_credentiumclaim\api\client();
+
+        $this->assertTrue(
+            $client->is_configured(),
+            'The plugin must reuse the connector credentials instead of asking for them again.'
+        );
+    }
+
+    public function test_client_is_unconfigured_when_the_connector_has_no_credentials(): void {
+        set_config('apiurl', '', 'local_credentium');
+        set_config('apikey', '', 'local_credentium');
+
+        $client = new \local_credentiumclaim\api\client();
+
+        $this->assertFalse($client->is_configured());
+    }
+
+    public function test_batch_stats_expose_unrecognised_identifiers(): void {
+        $client = $this->make_client();
+        $client->handler = function ($method, $url, $body) {
+            $ids = json_decode($body)->issueRequestIds;
+            // Credentium only recognises the first id.
+            return [200, json_encode(['results' => [
+                ['issueRequestId' => $ids[0], 'status' => 'issued'],
+            ]]), []];
+        };
+
+        $client->get_status_batch(['known', 'foreign']);
+
+        $this->assertSame(['requested' => 2, 'returned' => 1], $client->get_last_batch_stats());
+        $this->assertNull($client->get_last_error());
+    }
+
+    public function test_failed_batch_records_a_diagnosable_error(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [404, 'Not Found', []];
+
+        $map = $client->get_status_batch(['a']);
+
+        $this->assertSame([], $map, 'A failed chunk must not fabricate statuses.');
+        $this->assertNotNull(
+            $client->get_last_error(),
+            'A silently swallowed failure is what made credentials look stuck.'
+        );
+        $this->assertStringContainsString('404', $client->get_last_error());
+    }
+
+    public function test_failed_batch_surfaces_missing_scope(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [401, json_encode([
+            'error' => 'Invalid API key or insufficient permissions',
+            'required_scope' => 'credentials:read',
+        ]), []];
+
+        $client->get_status_batch(['a']);
+
+        // A key inherited from a plugin that only issues (not reads) credentials
+        // must be diagnosable from the report, not just "HTTP 401".
+        $this->assertStringContainsString('credentials:read', $client->get_last_error());
+        $this->assertStringContainsString('insufficient permissions', $client->get_last_error());
+        $this->assertTrue($client->last_error_was_auth());
+    }
+
+    public function test_non_auth_failure_is_not_reported_as_an_auth_problem(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [500, 'Internal Server Error', []];
+
+        $client->get_status_batch(['a']);
+
+        // Advice to widen the API key's scope must not be given for a server outage.
+        $this->assertNotNull($client->get_last_error());
+        $this->assertFalse($client->last_error_was_auth());
+    }
+
+    public function test_a_later_successful_chunk_does_not_mask_an_earlier_auth_failure(): void {
+        $client = $this->make_client();
+        $calls = 0;
+        $client->handler = function ($method, $url, $body) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return [401, json_encode(['error' => 'Invalid API key or insufficient permissions']), []];
+            }
+            return [200, json_encode(['results' => []]), []];
+        };
+
+        // 501 ids split into two chunks: the first is refused, the second succeeds.
+        $ids = [];
+        for ($i = 0; $i < 501; $i++) {
+            $ids[] = 'id' . $i;
+        }
+        $client->get_status_batch($ids);
+
+        $this->assertTrue(
+            $client->last_error_was_auth(),
+            'The status must belong to the failing response, not to whatever came last.'
+        );
+    }
+
     public function test_non_2xx_throws_apierror_without_leaking_secret(): void {
         $client = $this->make_client();
         $client->handler = fn($m, $u, $b) => [500, json_encode([

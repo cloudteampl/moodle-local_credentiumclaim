@@ -26,13 +26,27 @@ namespace local_credentiumclaim\task;
 
 use local_credentiumclaim\api\client;
 use local_credentiumclaim\local\claimable;
+use local_credentiumclaim\local\connector_config;
 
 /**
  * Discovers issued credentials from local_credentium and polls Credentium for their claim status.
+ *
+ * Every run leaves a machine-readable trace in the plugin configuration
+ * (see {@see self::record_run()}) so the admin report can explain *why* a sync
+ * produced no changes instead of leaving credentials apparently stuck.
  */
 class sync_status extends \core\task\scheduled_task {
     /** @var int Max rows discovered/polled per run (bounds cron time and third-party API load). */
     protected const MAX_PER_RUN = 1000;
+
+    /** @var string Run outcome: the sync completed (possibly with nothing to do). */
+    public const RESULT_OK = 'ok';
+    /** @var string Run outcome: the plugin is switched off. */
+    public const RESULT_DISABLED = 'disabled';
+    /** @var string Run outcome: no API credentials could be inherited from the connector. */
+    public const RESULT_NOTCONFIGURED = 'notconfigured';
+    /** @var string Run outcome: at least one API call failed. */
+    public const RESULT_ERROR = 'error';
 
     /** @var client|null Injected client (for tests). */
     protected $client = null;
@@ -57,12 +71,13 @@ class sync_status extends \core\task\scheduled_task {
     }
 
     /**
-     * Resolve the API client, creating a live one if none was injected.
+     * Resolve the API client for one set of credentials, honouring test injection.
      *
+     * @param \stdClass $config Credentials {apiurl, apikey}.
      * @return client
      */
-    protected function get_client(): client {
-        return $this->client ?? new client();
+    protected function get_client(\stdClass $config): client {
+        return $this->client ?? new client($config->apiurl, $config->apikey);
     }
 
     /**
@@ -73,19 +88,29 @@ class sync_status extends \core\task\scheduled_task {
     public function execute() {
         require_once(__DIR__ . '/../../lib.php');
 
+        connector_config::reset_cache();
+
         if (!local_credentiumclaim_is_enabled()) {
             mtrace('Credentium Claim is disabled; nothing to do.');
+            $this->record_run(self::RESULT_DISABLED);
             return;
         }
 
-        $client = $this->get_client();
-        if (!$client->is_configured()) {
-            mtrace('Credentium Claim API is not configured; skipping.');
+        if ($this->client === null && !connector_config::is_usable()) {
+            mtrace('No Credentium API credentials are available from local_credentium; skipping.');
+            $this->record_run(self::RESULT_NOTCONFIGURED);
             return;
         }
 
-        $this->discover();
-        $this->poll($client);
+        try {
+            $this->discover();
+            $this->poll();
+        } catch (\Throwable $e) {
+            // Polling records its own outcome, but a hard failure anywhere would leave
+            // the report showing the previous run's result as if it were current.
+            $this->record_run(self::RESULT_ERROR, ['error' => $e->getMessage()]);
+            throw $e;
+        }
     }
 
     /**
@@ -145,30 +170,122 @@ class sync_status extends \core\task\scheduled_task {
     /**
      * Poll Credentium for the status of all non-terminal tracked credentials.
      *
-     * @param client $client The API client.
+     * Rows are grouped by the credentials that apply to them, so a connector running
+     * in category mode (one API key per category) is polled with one batch call per
+     * distinct key rather than one wrong call for everything.
+     *
      * @return void
      */
-    protected function poll(client $client): void {
+    protected function poll(): void {
         $rows = claimable::get_pollable(self::MAX_PER_RUN);
         if (empty($rows)) {
             mtrace('No credentials pending a status check.');
+            $this->record_run(self::RESULT_OK);
             return;
         }
 
-        $keys = [];
+        $groups = [];
+        $unresolved = 0;
+        $unresolvedids = [];
         foreach ($rows as $row) {
-            $keys[$row->credentialkey] = true;
-        }
-
-        $statuses = $client->get_status_batch(array_keys($keys));
-
-        $updated = 0;
-        foreach ($rows as $row) {
-            if (isset($statuses[$row->credentialkey])) {
-                claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
-                $updated++;
+            $config = $this->resolve_config($row);
+            if ($config === null) {
+                $unresolved++;
+                // Stamp these too: without it, a credential that can never resolve
+                // credentials (deleted course, unconfigured category, no global
+                // fallback) would keep timechecked = 0 and, being polled in
+                // timechecked ASC order, permanently occupy the head of the queue.
+                $unresolvedids[] = (int) $row->id;
+                continue;
             }
+            $groupkey = sha1($config->apiurl . "\0" . $config->apikey);
+            if (!isset($groups[$groupkey])) {
+                $groups[$groupkey] = ['config' => $config, 'rows' => []];
+            }
+            $groups[$groupkey]['rows'][] = $row;
         }
-        mtrace('Polled ' . count($rows) . ' credential(s); updated ' . $updated . '.');
+        claimable::mark_checked($unresolvedids);
+
+        $polled = 0;
+        $updated = 0;
+        $unmatched = 0;
+        $error = null;
+
+        foreach ($groups as $group) {
+            $client = $this->get_client($group['config']);
+
+            $keys = [];
+            foreach ($group['rows'] as $row) {
+                $keys[$row->credentialkey] = true;
+            }
+            $statuses = $client->get_status_batch(array_keys($keys));
+
+            $unreported = [];
+            foreach ($group['rows'] as $row) {
+                $polled++;
+                if (isset($statuses[$row->credentialkey])) {
+                    claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
+                    $updated++;
+                } else {
+                    $unmatched++;
+                    $unreported[] = (int) $row->id;
+                }
+            }
+            // Stamp the ones the API stayed silent about so the poll queue keeps moving.
+            claimable::mark_checked($unreported);
+
+            $error = $error ?? $client->get_last_error();
+        }
+
+        mtrace('Polled ' . $polled . ' credential(s); updated ' . $updated . '.');
+        if ($unmatched > 0) {
+            mtrace('Credentium did not recognise ' . $unmatched . ' identifier(s).');
+        }
+        if ($unresolved > 0) {
+            mtrace('Skipped ' . $unresolved . ' credential(s) with no usable API credentials.');
+        }
+        if ($error !== null) {
+            mtrace('Last API error: ' . $error);
+        }
+
+        $this->record_run($error === null ? self::RESULT_OK : self::RESULT_ERROR, [
+            'polled' => $polled,
+            'updated' => $updated,
+            'unmatched' => $unmatched,
+            'unresolved' => $unresolved,
+            'error' => $error,
+        ]);
+    }
+
+    /**
+     * Credentials that apply to one tracked credential.
+     *
+     * @param \stdClass $row Tracking row.
+     * @return \stdClass|null {apiurl, apikey}, or null when nothing is configured.
+     */
+    protected function resolve_config(\stdClass $row): ?\stdClass {
+        if ($this->client !== null) {
+            // A client was injected (tests): the credentials are irrelevant but a group
+            // key is still needed, so return a stable placeholder.
+            return (object) ['apiurl' => 'injected', 'apikey' => 'injected'];
+        }
+        return connector_config::for_course(isset($row->courseid) ? (int) $row->courseid : null);
+    }
+
+    /**
+     * Persist a machine-readable summary of this run for the admin report.
+     *
+     * @param string $result One of the RESULT_* constants.
+     * @param array $counters Optional counters: polled, updated, unmatched, unresolved, error.
+     * @return void
+     */
+    protected function record_run(string $result, array $counters = []): void {
+        set_config('lastrun', time(), 'local_credentiumclaim');
+        set_config('lastrunresult', $result, 'local_credentiumclaim');
+        set_config('lastrunpolled', (int) ($counters['polled'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrunupdated', (int) ($counters['updated'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrununmatched', (int) ($counters['unmatched'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrununresolved', (int) ($counters['unresolved'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrunerror', (string) ($counters['error'] ?? ''), 'local_credentiumclaim');
     }
 }

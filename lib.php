@@ -53,6 +53,110 @@ function local_credentiumclaim_is_enabled() {
 }
 
 /**
+ * The scheduled task that polls Credentium for claim statuses.
+ *
+ * @return \core\task\scheduled_task|null Null if the task is not registered (mid-install).
+ */
+function local_credentiumclaim_get_sync_task() {
+    $task = \core\task\manager::get_scheduled_task('local_credentiumclaim\task\sync_status');
+    return $task ?: null;
+}
+
+/**
+ * The lock resource cron uses for the status-check task.
+ *
+ * Must match byte-for-byte what \core\task\manager uses, or a manual run would take a
+ * different lock and happily overlap a scheduled one. Core stores and looks up
+ * task_scheduled.classname through get_canonical_class_name() (which prepends a
+ * backslash) and locks on that stored value, so derive it the same way rather than
+ * hand-building the string. Covered by a test that compares it to the stored record.
+ *
+ * @return string Lock resource name.
+ */
+function local_credentiumclaim_sync_lock_resource() {
+    return \core\task\manager::get_canonical_class_name('local_credentiumclaim\task\sync_status');
+}
+
+/**
+ * Selectable status-check intervals, in minutes, keyed by minutes.
+ *
+ * Every option divides evenly into an hour (or is a whole number of hours) so it maps
+ * onto a valid cron expression without drift.
+ *
+ * @return array Map of minutes to human-readable label.
+ */
+function local_credentiumclaim_sync_interval_options() {
+    $options = [];
+    foreach ([5, 10, 15, 30, 60, 120, 240] as $minutes) {
+        $options[$minutes] = format_time($minutes * MINSECS);
+    }
+    return $options;
+}
+
+/**
+ * The interval the status-check task currently runs at.
+ *
+ * Read back from the task itself rather than from plugin config, so a schedule edited
+ * directly under Server > Scheduled tasks is reported honestly.
+ *
+ * @return int|null Interval in minutes, or null when the schedule is a custom
+ *                  expression that does not map onto a simple interval.
+ */
+function local_credentiumclaim_get_sync_interval() {
+    $task = local_credentiumclaim_get_sync_task();
+    if ($task === null) {
+        return null;
+    }
+    $minute = trim($task->get_minute());
+    $hour = trim($task->get_hour());
+
+    if ($hour === '*' && preg_match('~^\*/(\d+)$~', $minute, $matches)) {
+        return (int) $matches[1];
+    }
+    if ($minute === '0' && $hour === '*') {
+        return (int) HOURMINS;
+    }
+    if ($minute === '0' && preg_match('~^\*/(\d+)$~', $hour, $matches)) {
+        return ((int) $matches[1]) * HOURMINS;
+    }
+    return null;
+}
+
+/**
+ * Rewrite the status-check task's schedule to run every $minutes.
+ *
+ * @param int $minutes Interval in minutes; must be one of the offered options.
+ * @return bool True when the schedule was changed.
+ */
+function local_credentiumclaim_apply_sync_interval($minutes) {
+    $minutes = (int) $minutes;
+    if (!array_key_exists($minutes, local_credentiumclaim_sync_interval_options())) {
+        return false;
+    }
+    $task = local_credentiumclaim_get_sync_task();
+    if ($task === null) {
+        return false;
+    }
+
+    if ($minutes >= HOURMINS) {
+        $hours = intdiv($minutes, (int) HOURMINS);
+        $task->set_minute('0');
+        $task->set_hour($hours === 1 ? '*' : '*/' . $hours);
+    } else {
+        $task->set_minute('*/' . $minutes);
+        $task->set_hour('*');
+    }
+    $task->set_day('*');
+    $task->set_month('*');
+    $task->set_day_of_week('*');
+    // Mark as customised so a later plugin upgrade does not silently reset the choice.
+    $task->set_customised(true);
+
+    \core\task\manager::configure_scheduled_task($task);
+    return true;
+}
+
+/**
  * Add a "My credentials" node to the user's own profile page.
  *
  * @param \core_user\output\myprofile\tree $tree The profile tree.

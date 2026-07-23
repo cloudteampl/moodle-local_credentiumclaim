@@ -24,13 +24,19 @@
 
 namespace local_credentiumclaim\form;
 
+use local_credentiumclaim\local\connector_config;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
 require_once($CFG->libdir . '/formslib.php');
+require_once($CFG->dirroot . '/local/credentiumclaim/lib.php');
 
 /**
  * Admin settings form.
+ *
+ * Deliberately has no API URL or API key fields: both are inherited from the
+ * local_credentium connector plugin, which this plugin already requires.
  */
 class admin_settings_form extends \moodleform {
     /**
@@ -50,26 +56,22 @@ class admin_settings_form extends \moodleform {
         $mform->addElement('checkbox', 'enabled', get_string('enabled', 'local_credentiumclaim'));
         $mform->addHelpButton('enabled', 'enabled', 'local_credentiumclaim');
 
-        // API URL.
-        $mform->addElement('text', 'apiurl', get_string('apiurl', 'local_credentiumclaim'), ['size' => 60]);
-        $mform->setType('apiurl', PARAM_URL);
-        $mform->addHelpButton('apiurl', 'apiurl', 'local_credentiumclaim');
-        $mform->hideIf('apiurl', 'enabled', 'notchecked');
+        // Inherited API connection (read-only): the connector plugin owns these values.
+        $mform->addElement(
+            'static',
+            'inheritedconnection',
+            get_string('connection', 'local_credentiumclaim'),
+            $this->render_inherited_connection()
+        );
+        $mform->addHelpButton('inheritedconnection', 'connection', 'local_credentiumclaim');
 
-        // API key.
-        $mform->addElement('passwordunmask', 'apikey', get_string('apikey', 'local_credentiumclaim'), ['size' => 60]);
-        $mform->setType('apikey', PARAM_RAW_TRIMMED);
-        $mform->addHelpButton('apikey', 'apikey', 'local_credentiumclaim');
-        $mform->hideIf('apikey', 'enabled', 'notchecked');
-
-        // Test connection button (enabled only once both URL and key are saved).
-        $savedurl = get_config('local_credentiumclaim', 'apiurl');
-        $savedkey = get_config('local_credentiumclaim', 'apikey');
-        if (!empty($savedurl) && !empty($savedkey)) {
+        // Test connection button (only useful once credentials can be inherited).
+        if (connector_config::is_configured()) {
             $testurl = new \moodle_url('/local/credentiumclaim/testconnection.php', ['sesskey' => sesskey()]);
             $onclick = "window.open('" . $testurl->out(false) . "', '_blank'); return false;";
         } else {
-            $onclick = 'alert(' . json_encode(get_string('testconnection_disabled', 'local_credentiumclaim')) . '); return false;';
+            $warning = get_string('testconnection_disabled', 'local_credentiumclaim');
+            $onclick = 'alert(' . json_encode($warning) . '); return false;';
         }
         $mform->addElement(
             'button',
@@ -78,6 +80,18 @@ class admin_settings_form extends \moodleform {
             ['onclick' => $onclick]
         );
         $mform->hideIf('testconnection', 'enabled', 'notchecked');
+
+        // How often the status-check task runs.
+        $intervals = local_credentiumclaim_sync_interval_options();
+        if (local_credentiumclaim_get_sync_interval() === null) {
+            // The schedule was hand-edited under Server > Scheduled tasks; say so
+            // rather than silently overwriting it with the nearest offered value.
+            $intervals = ['' => get_string('syncinterval_custom', 'local_credentiumclaim')] + $intervals;
+        }
+        $mform->addElement('select', 'syncinterval', get_string('syncinterval', 'local_credentiumclaim'), $intervals);
+        $mform->setType('syncinterval', PARAM_INT);
+        $mform->addHelpButton('syncinterval', 'syncinterval', 'local_credentiumclaim');
+        $mform->hideIf('syncinterval', 'enabled', 'notchecked');
 
         // Show banner.
         $mform->addElement('advcheckbox', 'showbanner', get_string('showbanner', 'local_credentiumclaim'));
@@ -94,26 +108,42 @@ class admin_settings_form extends \moodleform {
     }
 
     /**
-     * Server-side validation.
+     * Read-only summary of the credentials inherited from the connector plugin.
      *
-     * @param array $data Submitted data.
-     * @param array $files Submitted files.
-     * @return array Errors keyed by element name.
+     * @return string HTML.
      */
-    public function validation($data, $files) {
-        $errors = parent::validation($data, $files);
+    protected function render_inherited_connection(): string {
+        $manage = \html_writer::link(
+            connector_config::settings_url(),
+            get_string('connection_manage', 'local_credentiumclaim')
+        );
 
-        if (!empty($data['enabled'])) {
-            if (empty($data['apiurl'])) {
-                $errors['apiurl'] = get_string('required');
-            } else if (!filter_var($data['apiurl'], FILTER_VALIDATE_URL)) {
-                $errors['apiurl'] = get_string('error:invalidapiurl', 'local_credentiumclaim');
-            }
-            if (empty($data['apikey'])) {
-                $errors['apikey'] = get_string('required');
-            }
+        if (!connector_config::is_installed()) {
+            return \html_writer::div(
+                get_string('connection_missingplugin', 'local_credentiumclaim'),
+                'alert alert-danger mb-0'
+            );
         }
 
-        return $errors;
+        $credentials = connector_config::global_credentials();
+        if ($credentials === null) {
+            $body = \html_writer::tag('p', get_string('connection_notconfigured', 'local_credentiumclaim'));
+            $body .= \html_writer::tag('p', $manage, ['class' => 'mb-0']);
+            return \html_writer::div($body, 'alert alert-warning mb-0');
+        }
+
+        $rows = \html_writer::tag(
+            'div',
+            \html_writer::tag('strong', get_string('connection_apiurl', 'local_credentiumclaim') . ': ')
+                . \html_writer::tag('code', s($credentials->apiurl))
+        );
+        $rows .= \html_writer::tag(
+            'div',
+            \html_writer::tag('strong', get_string('connection_apikey', 'local_credentiumclaim') . ': ')
+                . get_string('connection_apikey_set', 'local_credentiumclaim')
+        );
+        $rows .= \html_writer::tag('div', $manage, ['class' => 'mt-2']);
+
+        return \html_writer::div($rows, 'alert alert-light border mb-0');
     }
 }
