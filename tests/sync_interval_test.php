@@ -100,9 +100,10 @@ final class sync_interval_test extends \advanced_testcase {
     public function test_applying_an_interval_marks_the_task_customised(): void {
         local_credentiumclaim_apply_sync_interval(5);
 
+        // The customised flag comes back as the raw stored value ('1'), not a boolean.
         $task = local_credentiumclaim_get_sync_task();
         $this->assertTrue(
-            $task->is_customised(),
+            (bool) $task->is_customised(),
             'A plugin upgrade must not silently reset an admin-chosen interval.'
         );
     }
