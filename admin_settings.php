@@ -24,36 +24,32 @@
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
+require_once(__DIR__ . '/lib.php');
 
-require_login();
-require_capability('moodle/site:config', context_system::instance());
-
+// Login, capability, URL, title and heading are all handled by the call below.
 admin_externalpage_setup('local_credentiumclaim');
-
-$PAGE->set_url(new moodle_url('/local/credentiumclaim/admin_settings.php'));
-$PAGE->set_context(context_system::instance());
-$PAGE->set_title(get_string('pluginname', 'local_credentiumclaim'));
-$PAGE->set_heading(get_string('globalsettings', 'local_credentiumclaim'));
 
 $mform = new \local_credentiumclaim\form\admin_settings_form();
 
 $config = new stdClass();
 $config->enabled = get_config('local_credentiumclaim', 'enabled');
-$config->apiurl = get_config('local_credentiumclaim', 'apiurl');
-$config->apikey = get_config('local_credentiumclaim', 'apikey');
 $showbanner = get_config('local_credentiumclaim', 'showbanner');
 $config->showbanner = ($showbanner === false) ? 1 : $showbanner;
 $config->debuglog = get_config('local_credentiumclaim', 'debuglog');
+$config->syncinterval = local_credentiumclaim_get_sync_interval();
 $mform->set_data($config);
 
 if ($mform->is_cancelled()) {
     redirect(new moodle_url('/admin/plugins.php', ['subtype' => 'local']));
 } else if ($data = $mform->get_data()) {
     set_config('enabled', !empty($data->enabled) ? 1 : 0, 'local_credentiumclaim');
-    set_config('apiurl', !empty($data->apiurl) ? trim($data->apiurl) : '', 'local_credentiumclaim');
-    set_config('apikey', !empty($data->apikey) ? $data->apikey : '', 'local_credentiumclaim');
     set_config('showbanner', !empty($data->showbanner) ? 1 : 0, 'local_credentiumclaim');
     set_config('debuglog', !empty($data->debuglog) ? 1 : 0, 'local_credentiumclaim');
+
+    // An empty interval means "leave the hand-edited cron schedule alone".
+    if (isset($data->syncinterval) && $data->syncinterval !== '') {
+        local_credentiumclaim_apply_sync_interval((int) $data->syncinterval);
+    }
 
     cache_helper::purge_by_definition('core', 'config');
 
@@ -66,5 +62,6 @@ if ($mform->is_cancelled()) {
 }
 
 echo $OUTPUT->header();
+echo $OUTPUT->heading(get_string('globalsettings', 'local_credentiumclaim'));
 echo $mform->render();
 echo $OUTPUT->footer();

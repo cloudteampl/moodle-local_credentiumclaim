@@ -24,12 +24,17 @@
 
 namespace local_credentiumclaim\api;
 
+use local_credentiumclaim\local\connector_config;
+
 /**
  * Thin HTTP client for the Credentium issuer API (v2 surface).
  *
  * All network access is funneled through {@see self::raw_request()}, which is the
  * single override point for unit tests. Secrets (API key, claim URLs) are never
  * written to logs — see {@see self::sanitize_for_log()}.
+ *
+ * Credentials are inherited from the local_credentium connector plugin unless the
+ * caller passes them explicitly.
  */
 class client {
     /** @var string Endpoint: batch status. */
@@ -64,15 +69,29 @@ class client {
     /** @var string|null API key. */
     private $apikey;
 
+    /** @var string|null Technical description of the most recent failure. */
+    private $lasterror = null;
+
+    /** @var int Identifiers submitted to the batch status endpoint in the last call. */
+    private $lastrequested = 0;
+
+    /** @var int Identifiers Credentium recognised in the last batch status call. */
+    private $lastreturned = 0;
+
     /**
      * Constructor.
      *
-     * @param string|null $apiurl Base API URL (defaults to plugin config).
-     * @param string|null $apikey API key (defaults to plugin config).
+     * @param string|null $apiurl Base API URL (defaults to the inherited connector URL).
+     * @param string|null $apikey API key (defaults to the inherited connector key).
      */
     public function __construct(?string $apiurl = null, ?string $apikey = null) {
-        $this->apiurl = ($apiurl !== null && $apiurl !== '') ? $apiurl : get_config('local_credentiumclaim', 'apiurl');
-        $this->apikey = ($apikey !== null && $apikey !== '') ? $apikey : get_config('local_credentiumclaim', 'apikey');
+        if ($apiurl === null || $apiurl === '' || $apikey === null || $apikey === '') {
+            $inherited = connector_config::global_credentials();
+            $apiurl = ($apiurl !== null && $apiurl !== '') ? $apiurl : ($inherited->apiurl ?? null);
+            $apikey = ($apikey !== null && $apikey !== '') ? $apikey : ($inherited->apikey ?? null);
+        }
+        $this->apiurl = $apiurl;
+        $this->apikey = $apikey;
 
         if (!empty($this->apiurl) && !filter_var($this->apiurl, FILTER_VALIDATE_URL)) {
             throw new \moodle_exception('error:invalidapiurl', 'local_credentiumclaim');
@@ -81,6 +100,17 @@ class client {
             // Keys use the format public_id.secret — PARAM_RAW_TRIMMED preserves the dot.
             $this->apikey = clean_param($this->apikey, PARAM_RAW_TRIMMED);
         }
+    }
+
+    /**
+     * Build a client for credentials issued in a given course (honours category mode).
+     *
+     * @param int|null $courseid Course id, or null for the site-wide credentials.
+     * @return self
+     */
+    public static function for_course(?int $courseid = null): self {
+        $config = connector_config::for_course($courseid);
+        return new self($config->apiurl ?? null, $config->apikey ?? null);
     }
 
     /**
@@ -93,6 +123,29 @@ class client {
     }
 
     /**
+     * Technical description of the most recent failure, for admin diagnostics.
+     *
+     * Never contains secrets: the message is built from the HTTP status and path only.
+     *
+     * @return string|null Null when the last operation succeeded.
+     */
+    public function get_last_error(): ?string {
+        return $this->lasterror;
+    }
+
+    /**
+     * Identifier counts from the most recent {@see self::get_status_batch()} call.
+     *
+     * A `returned` lower than `requested` means Credentium did not recognise some
+     * identifiers — typically an API key belonging to a different organisation.
+     *
+     * @return array Counts keyed by 'requested' and 'returned'.
+     */
+    public function get_last_batch_stats(): array {
+        return ['requested' => $this->lastrequested, 'returned' => $this->lastreturned];
+    }
+
+    /**
      * Fetch claim/issue status for a set of issue-request ids, in batches of 500.
      *
      * @param string[] $issuerequestids Credentium issueRequestId values.
@@ -101,11 +154,15 @@ class client {
     public function get_status_batch(array $issuerequestids): array {
         $ids = array_values(array_unique(array_filter(array_map('strval', $issuerequestids), 'strlen')));
         $result = [];
+        $this->lasterror = null;
+        $this->lastrequested = count($ids);
+        $this->lastreturned = 0;
         foreach (array_chunk($ids, self::BATCH_MAX) as $chunk) {
             try {
                 $response = $this->request('POST', self::PATH_STATUS, [], ['issueRequestIds' => $chunk]);
             } catch (\moodle_exception $e) {
                 // Isolate the failure: keep results already gathered and poll the remaining chunks.
+                // The reason is retained so the admin report can explain a sync that did nothing.
                 require_once(__DIR__ . '/../../lib.php');
                 local_credentiumclaim_log('Batch status chunk failed', ['size' => count($chunk)]);
                 continue;
@@ -125,6 +182,7 @@ class client {
                 $result[(string)$row->issueRequestId] = $snapshot;
             }
         }
+        $this->lastreturned = count($result);
         return $result;
     }
 
@@ -203,6 +261,7 @@ class client {
      */
     private function request(string $method, string $endpoint, array $params = [], ?array $data = null) {
         if (!$this->is_configured()) {
+            $this->lasterror = 'API credentials are not available.';
             throw new \moodle_exception('error:apinotconfigured', 'local_credentiumclaim');
         }
 
@@ -224,25 +283,30 @@ class client {
         [$httpcode, $responsebody, $info] = $this->raw_request($method, $url, $headers, $bodyjson);
         unset($info);
 
+        $path = parse_url($url, PHP_URL_PATH);
+
         if ($httpcode >= 200 && $httpcode < 300) {
             if ($responsebody === null || $responsebody === false || $responsebody === '') {
                 return null;
             }
             $decoded = json_decode($responsebody);
             if (json_last_error() !== JSON_ERROR_NONE) {
+                $this->lasterror = 'Invalid JSON response from ' . $path;
                 throw new \moodle_exception('error:invalidjsonresponse', 'local_credentiumclaim');
             }
             return $decoded;
         }
 
+        $this->lasterror = 'HTTP ' . $httpcode . ' from ' . $method . ' ' . $path;
+
         // Non-2xx: log a sanitised summary and throw without leaking secrets.
         local_credentiumclaim_log('API request failed', [
-            'path' => parse_url($url, PHP_URL_PATH),
+            'path' => $path,
             'method' => $method,
             'http_code' => $httpcode,
             'body' => $this->sanitize_for_log((string)$responsebody),
         ]);
-        $debuginfo = 'HTTP ' . $httpcode . ' for ' . parse_url($url, PHP_URL_PATH);
+        $debuginfo = 'HTTP ' . $httpcode . ' for ' . $path;
         throw new \moodle_exception('apierror', 'local_credentiumclaim', '', null, $debuginfo);
     }
 

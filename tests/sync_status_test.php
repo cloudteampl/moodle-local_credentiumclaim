@@ -87,6 +87,41 @@ final class sync_status_test extends \advanced_testcase {
         $this->assertSame(1, claimable::count_for_user($u->id));
     }
 
+    public function test_unrecognised_identifiers_are_recorded_for_the_admin_report(): void {
+        set_config('enabled', 1, 'local_credentiumclaim');
+        $u = $this->getDataGenerator()->create_user();
+
+        // Credentium knows nothing about rq-1 — e.g. the key belongs to another org.
+        $task = $this->make_task(
+            [(object) ['id' => 1, 'userid' => $u->id, 'courseid' => null, 'credentialid' => 'rq-1']],
+            []
+        );
+
+        $this->run_task($task);
+
+        $this->assertSame('ok', get_config('local_credentiumclaim', 'lastrunresult'));
+        $this->assertSame('1', get_config('local_credentiumclaim', 'lastrunpolled'));
+        $this->assertSame('0', get_config('local_credentiumclaim', 'lastrunupdated'));
+        $this->assertSame(
+            '1',
+            get_config('local_credentiumclaim', 'lastrununmatched'),
+            'A credential the API does not recognise must be reported, not silently ignored.'
+        );
+    }
+
+    public function test_disabled_run_is_recorded(): void {
+        set_config('enabled', 0, 'local_credentiumclaim');
+        $u = $this->getDataGenerator()->create_user();
+
+        $this->run_task($this->make_task(
+            [(object) ['id' => 1, 'userid' => $u->id, 'courseid' => null, 'credentialid' => 'rq-1']],
+            ['rq-1' => 'issued']
+        ));
+
+        $this->assertSame('disabled', get_config('local_credentiumclaim', 'lastrunresult'));
+        $this->assertNotEmpty(get_config('local_credentiumclaim', 'lastrun'));
+    }
+
     /**
      * Build a sync task with canned source issuances and a canned status map.
      *

@@ -186,6 +186,34 @@ class claimable {
     }
 
     /**
+     * Stamp rows as checked without changing their status.
+     *
+     * Used for credentials the API did not report on. Without this the rows would keep
+     * `timechecked = 0`, and since polling is ordered by `timechecked ASC` they would
+     * occupy the head of the queue on every run and starve everything behind them.
+     *
+     * @param int[] $rowids Row ids to stamp.
+     * @return void
+     */
+    public static function mark_checked(array $rowids): void {
+        global $DB;
+        $rowids = array_values(array_unique(array_map('intval', $rowids)));
+        if (empty($rowids)) {
+            return;
+        }
+        $now = time();
+        // Chunked to stay clear of the 1000-item limit some databases place on IN ().
+        foreach (array_chunk($rowids, 500) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'id');
+            $params['now'] = $now;
+            $DB->execute(
+                'UPDATE {' . self::TABLE . '} SET timechecked = :now WHERE id ' . $insql,
+                $params
+            );
+        }
+    }
+
+    /**
      * Suppress the banner for one credential (explicit dismiss or after the user clicks claim).
      *
      * @param int $userid User id.
