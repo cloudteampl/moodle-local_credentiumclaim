@@ -35,17 +35,40 @@ $returnurl = new moodle_url('/local/credentiumclaim/index.php');
 
 $task = new sync_status();
 
+// Take the same lock cron uses for this task, under the same resource name, so a
+// manual run cannot overlap a scheduled one. Without it both could discover the
+// same credentials concurrently and race on the (userid, credentialkey) unique key.
+$cronlockfactory = \core\lock\lock_config::get_lock_factory('cron');
+$lock = $cronlockfactory->get_lock(ltrim(sync_status::class, '\\'), 5);
+if (!$lock) {
+    redirect(
+        $returnurl,
+        get_string('report_checknow_busy', 'local_credentiumclaim'),
+        null,
+        \core\output\notification::NOTIFY_INFO
+    );
+}
+
 // The task is bounded (1000 credentials per run) but still talks to a third party.
 \core_php_time_limit::raise(300);
 
 // Swallow the task's mtrace() output: the outcome is reported from the recorded run.
+$failed = false;
 ob_start();
 try {
     $task->execute();
 } catch (Throwable $e) {
-    ob_end_clean();
+    $failed = true;
     // The message below tells the admin to check the logs, so put something there.
     debugging('[CredentiumClaim] Manual status check failed: ' . $e->getMessage(), DEBUG_NORMAL);
+}
+ob_end_clean();
+
+// Released explicitly rather than in a finally block: redirect() exits, and exit
+// does not unwind finally.
+$lock->release();
+
+if ($failed) {
     redirect(
         $returnurl,
         get_string('report_checknow_failed', 'local_credentiumclaim'),
@@ -53,7 +76,6 @@ try {
         \core\output\notification::NOTIFY_ERROR
     );
 }
-ob_end_clean();
 
 $result = get_config('local_credentiumclaim', 'lastrunresult');
 switch ($result) {

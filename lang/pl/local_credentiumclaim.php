@@ -76,6 +76,7 @@ $string['privacy:metadata:local_credentiumclaim_status:timecreated'] = 'Czas utw
 $string['privacy:metadata:local_credentiumclaim_status:userid'] = 'Identyfikator użytkownika, do którego należy poświadczenie.';
 $string['report'] = 'Status Credentium® Claim';
 $string['report_checknow'] = 'Sprawdź status teraz';
+$string['report_checknow_busy'] = 'Sprawdzanie statusu już trwa (uruchomione przez cron lub innego administratora). Spróbuj ponownie za chwilę.';
 $string['report_checknow_failed'] = 'Nie udało się przeprowadzić sprawdzenia statusu. Szczegóły znajdziesz w logach serwera.';
 $string['report_connection_missing'] = 'Wtyczka Integracja Credentium® nie udostępnia poświadczeń API, więc statusy nie mogą być sprawdzane.';
 $string['report_connection_ok'] = 'Odziedziczone z wtyczki Integracja Credentium® ({$a})';

@@ -161,9 +161,15 @@ class claimable {
         try {
             $DB->insert_record(self::TABLE, $record);
         } catch (\dml_write_exception $e) {
-            // A concurrent run (cron and the manual "Check status now" can overlap)
-            // inserted the same credential between the check above and this insert.
-            // The unique key on (userid, credentialkey) makes that harmless.
+            // Most likely a concurrent run (cron and the manual "Check status now" can
+            // overlap) inserted the same credential between the check above and this
+            // insert; the unique key on (userid, credentialkey) makes that harmless.
+            // Anything else is a real write failure and must not vanish silently.
+            if (!$DB->record_exists(self::TABLE, ['userid' => $userid, 'credentialkey' => $credentialkey])) {
+                require_once(__DIR__ . '/../../lib.php');
+                local_credentiumclaim_log('Failed to track credential', ['userid' => $userid]);
+                throw $e;
+            }
             return false;
         }
         self::purge_cache($userid);

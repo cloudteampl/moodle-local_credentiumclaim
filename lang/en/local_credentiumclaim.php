@@ -76,6 +76,7 @@ $string['privacy:metadata:local_credentiumclaim_status:timecreated'] = 'The time
 $string['privacy:metadata:local_credentiumclaim_status:userid'] = 'The ID of the user the credential belongs to.';
 $string['report'] = 'Credentium® Claim status';
 $string['report_checknow'] = 'Check status now';
+$string['report_checknow_busy'] = 'A status check is already running (started by cron or another administrator). Try again in a moment.';
 $string['report_checknow_failed'] = 'The status check could not be completed. Check the server logs for details.';
 $string['report_connection_missing'] = 'No API credentials are available from the Credentium® Integration plugin, so statuses cannot be checked.';
 $string['report_connection_ok'] = 'Inherited from Credentium® Integration ({$a})';
