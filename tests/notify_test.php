@@ -59,6 +59,30 @@ final class notify_test extends \advanced_testcase {
         $this->assertEquals(1, $messages[0]->notification);
     }
 
+    public function test_notification_names_the_course_when_known(): void {
+        $course = $this->getDataGenerator()->create_course(['fullname' => 'Astrophysics 101']);
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, (int) $course->id);
+        $row = $this->row($user->id, 'key-1');
+
+        $sink = $this->redirectMessages();
+        $this->assertTrue(notifier::credential_ready($row));
+
+        $messages = $sink->get_messages();
+        $this->assertCount(1, $messages);
+        $this->assertStringContainsString('Astrophysics 101', $messages[0]->fullmessage);
+    }
+
+    public function test_no_notification_for_a_suspended_user(): void {
+        $user = $this->getDataGenerator()->create_user(['suspended' => 1]);
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        $row = $this->row($user->id, 'key-1');
+
+        $sink = $this->redirectMessages();
+        $this->assertFalse(notifier::credential_ready($row), 'A suspended learner must not be messaged.');
+        $this->assertCount(0, $sink->get_messages());
+    }
+
     public function test_user_menu_entry_appears_only_with_a_claimable_credential(): void {
         $user = $this->getDataGenerator()->create_user();
         $this->setUser($user);

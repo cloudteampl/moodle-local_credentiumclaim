@@ -149,6 +149,12 @@ $diagnostics->data[] = [
 ];
 $diagnostics->data[] = [get_string('report_lastresult', 'local_credentiumclaim'), $outcome];
 
+// Bell notifications sent on the last run (confirms the "ready to claim" nudge fired).
+$diagnostics->data[] = [
+    get_string('report_notified', 'local_credentiumclaim'),
+    (int) get_config('local_credentiumclaim', 'lastrunnotified'),
+];
+
 // Per-credential freshness.
 $lastcheck = $DB->get_field_sql('SELECT MAX(timechecked) FROM {local_credentiumclaim_status}');
 $diagnostics->data[] = [

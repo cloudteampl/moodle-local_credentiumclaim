@@ -100,7 +100,7 @@ class hook_callbacks {
             'itemtype' => 'link',
             'url' => new \moodle_url('/local/credentiumclaim/mycredentials.php'),
             'title' => get_string('nav_mycredentials_count', 'local_credentiumclaim', $count),
-            'titleidentifier' => 'mycredentials,local_credentiumclaim',
+            'titleidentifier' => 'nav_mycredentials_count,local_credentiumclaim',
         ]);
     }
 }

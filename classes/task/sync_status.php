@@ -210,6 +210,7 @@ class sync_status extends \core\task\scheduled_task {
         $polled = 0;
         $updated = 0;
         $unmatched = 0;
+        $notifiedtotal = 0;
         $error = null;
 
         foreach ($groups as $group) {
@@ -239,6 +240,7 @@ class sync_status extends \core\task\scheduled_task {
             if ($notified > 0) {
                 mtrace('Notified ' . $notified . ' learner(s) of a newly claimable credential.');
             }
+            $notifiedtotal += $notified;
             // Stamp the ones the API stayed silent about so the poll queue keeps moving.
             claimable::mark_checked($unreported);
 
@@ -261,6 +263,7 @@ class sync_status extends \core\task\scheduled_task {
             'updated' => $updated,
             'unmatched' => $unmatched,
             'unresolved' => $unresolved,
+            'notified' => $notifiedtotal,
             'error' => $error,
         ]);
     }
@@ -284,7 +287,7 @@ class sync_status extends \core\task\scheduled_task {
      * Persist a machine-readable summary of this run for the admin report.
      *
      * @param string $result One of the RESULT_* constants.
-     * @param array $counters Optional counters: polled, updated, unmatched, unresolved, error.
+     * @param array $counters Optional counters: polled, updated, unmatched, unresolved, notified, error.
      * @return void
      */
     protected function record_run(string $result, array $counters = []): void {
@@ -294,6 +297,7 @@ class sync_status extends \core\task\scheduled_task {
         set_config('lastrunupdated', (int) ($counters['updated'] ?? 0), 'local_credentiumclaim');
         set_config('lastrununmatched', (int) ($counters['unmatched'] ?? 0), 'local_credentiumclaim');
         set_config('lastrununresolved', (int) ($counters['unresolved'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrunnotified', (int) ($counters['notified'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunerror', (string) ($counters['error'] ?? ''), 'local_credentiumclaim');
     }
 }

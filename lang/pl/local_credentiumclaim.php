@@ -94,6 +94,7 @@ $string['report_lastresult'] = 'Wynik ostatniego uruchomienia';
 $string['report_lastrun'] = 'Ostatnie uruchomienie synchronizacji';
 $string['report_lastsync'] = 'Ostatnie sprawdzenie poświadczenia';
 $string['report_never'] = 'Nigdy';
+$string['report_notified'] = 'Powiadomienia wysłane w ostatnim uruchomieniu';
 $string['report_plugindisabled'] = 'Credentium® Claim jest wyłączony, więc statusy nie są sprawdzane.';
 $string['report_property'] = 'Właściwość';
 $string['report_result_disabled'] = 'Pominięto: wtyczka jest wyłączona.';

@@ -94,6 +94,7 @@ $string['report_lastresult'] = 'Last run outcome';
 $string['report_lastrun'] = 'Last sync run';
 $string['report_lastsync'] = 'Most recent credential check';
 $string['report_never'] = 'Never';
+$string['report_notified'] = 'Notifications sent on the last run';
 $string['report_plugindisabled'] = 'Credentium® Claim is disabled, so no status checks are being made.';
 $string['report_property'] = 'Property';
 $string['report_result_disabled'] = 'Skipped: the plugin is disabled.';
