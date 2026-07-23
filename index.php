@@ -183,6 +183,13 @@ if ($unresolved > 0) {
         \core\output\notification::NOTIFY_WARNING
     );
 }
+$notifyfailed = (int) get_config('local_credentiumclaim', 'lastrunnotifyfailed');
+if ($notifyfailed > 0) {
+    echo $OUTPUT->notification(
+        get_string('report_notifyfailed', 'local_credentiumclaim', $notifyfailed),
+        \core\output\notification::NOTIFY_WARNING
+    );
+}
 
 // Run the check on demand (site administrators only).
 if (has_capability('moodle/site:config', context_system::instance())) {

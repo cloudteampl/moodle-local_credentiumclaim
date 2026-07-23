@@ -109,6 +109,21 @@ final class sync_status_test extends \advanced_testcase {
         );
     }
 
+    public function test_failed_notification_is_counted_for_the_report(): void {
+        set_config('enabled', 1, 'local_credentiumclaim');
+        // A suspended learner cannot be messaged, so the notification "fails" — the
+        // report must count it rather than let it vanish.
+        $u = $this->getDataGenerator()->create_user(['suspended' => 1]);
+
+        $this->run_task($this->make_task(
+            [(object) ['id' => 1, 'userid' => $u->id, 'courseid' => null, 'credentialid' => 'rq-1']],
+            ['rq-1' => 'issued']
+        ));
+
+        $this->assertSame('0', get_config('local_credentiumclaim', 'lastrunnotified'));
+        $this->assertSame('1', get_config('local_credentiumclaim', 'lastrunnotifyfailed'));
+    }
+
     public function test_disabled_run_is_recorded(): void {
         set_config('enabled', 0, 'local_credentiumclaim');
         $u = $this->getDataGenerator()->create_user();

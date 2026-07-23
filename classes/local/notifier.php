@@ -43,8 +43,7 @@ class notifier {
      * @return bool True when a message was handed to the Message API.
      */
     public static function credential_ready(\stdClass $row): bool {
-        global $DB, $CFG;
-        require_once($CFG->dirroot . '/local/credentiumclaim/lib.php');
+        global $DB;
 
         // The whole body is guarded: a notification is best-effort (the banner and the
         // user-menu entry surface the credential regardless), and must never abort a

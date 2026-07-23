@@ -211,6 +211,7 @@ class sync_status extends \core\task\scheduled_task {
         $updated = 0;
         $unmatched = 0;
         $notifiedtotal = 0;
+        $notifyfailedtotal = 0;
         $error = null;
 
         foreach ($groups as $group) {
@@ -224,12 +225,18 @@ class sync_status extends \core\task\scheduled_task {
 
             $unreported = [];
             $notified = 0;
+            $notifyfailed = 0;
             foreach ($group['rows'] as $row) {
                 $polled++;
                 if (isset($statuses[$row->credentialkey])) {
                     $becameready = claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
-                    if ($becameready && notifier::credential_ready($row)) {
-                        $notified++;
+                    if ($becameready) {
+                        // Best-effort push; a failure is counted so the report can flag it.
+                        if (notifier::credential_ready($row)) {
+                            $notified++;
+                        } else {
+                            $notifyfailed++;
+                        }
                     }
                     $updated++;
                 } else {
@@ -240,7 +247,11 @@ class sync_status extends \core\task\scheduled_task {
             if ($notified > 0) {
                 mtrace('Notified ' . $notified . ' learner(s) of a newly claimable credential.');
             }
+            if ($notifyfailed > 0) {
+                mtrace('Failed to notify ' . $notifyfailed . ' learner(s) of a claimable credential.');
+            }
             $notifiedtotal += $notified;
+            $notifyfailedtotal += $notifyfailed;
             // Stamp the ones the API stayed silent about so the poll queue keeps moving.
             claimable::mark_checked($unreported);
 
@@ -264,6 +275,7 @@ class sync_status extends \core\task\scheduled_task {
             'unmatched' => $unmatched,
             'unresolved' => $unresolved,
             'notified' => $notifiedtotal,
+            'notifyfailed' => $notifyfailedtotal,
             'error' => $error,
         ]);
     }
@@ -287,7 +299,8 @@ class sync_status extends \core\task\scheduled_task {
      * Persist a machine-readable summary of this run for the admin report.
      *
      * @param string $result One of the RESULT_* constants.
-     * @param array $counters Optional counters: polled, updated, unmatched, unresolved, notified, error.
+     * @param array $counters Optional counters: polled, updated, unmatched, unresolved,
+     *                        notified, notifyfailed, error.
      * @return void
      */
     protected function record_run(string $result, array $counters = []): void {
@@ -298,6 +311,7 @@ class sync_status extends \core\task\scheduled_task {
         set_config('lastrununmatched', (int) ($counters['unmatched'] ?? 0), 'local_credentiumclaim');
         set_config('lastrununresolved', (int) ($counters['unresolved'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunnotified', (int) ($counters['notified'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrunnotifyfailed', (int) ($counters['notifyfailed'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunerror', (string) ($counters['error'] ?? ''), 'local_credentiumclaim');
     }
 }
