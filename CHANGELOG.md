@@ -26,10 +26,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   advertised. The bell notification fires exactly once per credential, on the
   processing → ready transition, so re-syncing never re-notifies.
 - The bell notification is **best-effort**: it is not retried if delivery fails
-  (e.g. the learner disabled all notification channels), and a send failure never
-  aborts the sync. The user-menu entry and banner remain the reliable surfaces for
-  any learner who logs in. The report now counts both sent and failed
-  notifications so an administrator can see when a push did not get through.
+  (e.g. the site's mail delivery is down, the notification type is disabled
+  site-wide, or the recipient is suspended), and a send failure never aborts the
+  sync. The user-menu entry and banner remain the reliable surfaces for any learner
+  who logs in. The report now counts both sent and failed notifications so an
+  administrator can see when a push did not get through. (A learner who has simply
+  turned off the notification for themselves is not a failure — Moodle records that
+  as delivered-and-read.)
 
 ## [1.1.0] - 2026-07-23
 
