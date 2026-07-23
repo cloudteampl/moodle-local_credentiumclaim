@@ -149,6 +149,12 @@ $diagnostics->data[] = [
 ];
 $diagnostics->data[] = [get_string('report_lastresult', 'local_credentiumclaim'), $outcome];
 
+// Bell notifications sent on the last run (confirms the "ready to claim" nudge fired).
+$diagnostics->data[] = [
+    get_string('report_notified', 'local_credentiumclaim'),
+    (int) get_config('local_credentiumclaim', 'lastrunnotified'),
+];
+
 // Per-credential freshness.
 $lastcheck = $DB->get_field_sql('SELECT MAX(timechecked) FROM {local_credentiumclaim_status}');
 $diagnostics->data[] = [
@@ -174,6 +180,13 @@ $unresolved = (int) get_config('local_credentiumclaim', 'lastrununresolved');
 if ($unresolved > 0) {
     echo $OUTPUT->notification(
         get_string('report_unresolved', 'local_credentiumclaim', $unresolved),
+        \core\output\notification::NOTIFY_WARNING
+    );
+}
+$notifyfailed = (int) get_config('local_credentiumclaim', 'lastrunnotifyfailed');
+if ($notifyfailed > 0) {
+    echo $OUTPUT->notification(
+        get_string('report_notifyfailed', 'local_credentiumclaim', $notifyfailed),
         \core\output\notification::NOTIFY_WARNING
     );
 }

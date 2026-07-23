@@ -80,6 +80,34 @@ final class claimable_test extends \advanced_testcase {
         $this->assertSame(1, claimable::count_for_user($user->id));
     }
 
+    public function test_claimable_count_ignores_dismissal(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued');
+
+        claimable::dismiss($user->id, $this->row($user->id, 'key-1')->id);
+
+        // The banner honours dismissal; the persistent menu count deliberately does not.
+        $this->assertSame(0, claimable::count_for_user($user->id), 'Banner count drops after dismissal.');
+        $this->assertSame(
+            1,
+            claimable::count_claimable_for_user($user->id),
+            'The standing menu pointer must survive a dismissed banner.'
+        );
+    }
+
+    public function test_apply_remote_status_signals_only_a_fresh_issued_transition(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+
+        // The processing-to-issued transition is the claim-me moment.
+        $this->assertTrue(claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued'));
+        // Re-polling an already-issued row must not re-signal, or the learner is spammed.
+        $this->assertFalse(claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued'));
+        // Issued-to-claimed is a change, but not into the claimable state.
+        $this->assertFalse(claimable::apply_remote_status($this->row($user->id, 'key-1'), 'claimed'));
+    }
+
     public function test_pollable_excludes_terminal_statuses(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'k-proc', null, null);

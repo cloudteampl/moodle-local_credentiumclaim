@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-23
+
+### Added
+- **Made a ready credential impossible to miss.** A dismissible banner on its own
+  was too easy to overlook, so a learner with a credential to claim is now reached
+  three ways:
+  - a **bell notification** (popup + email, per the learner's messaging
+    preferences), sent once at the moment a credential becomes ready to claim;
+  - a persistent **"My credentials (N)"** entry in the user menu (the avatar
+    dropdown), shown whenever there is something to claim — and, unlike the banner,
+    it does **not** disappear when the banner is dismissed;
+  - the existing top-of-page banner.
+- The profile "My credentials" node and the user-menu entry share one
+  dismiss-independent count, so a learner who closed the banner still has a
+  standing, accurate pointer to what is waiting for them.
+
+### Notes
+- All three surfaces reflect the **"Ready to claim"** state only, matching the
+  banner. A credential that is still being prepared, or already claimed, is not
+  advertised. The bell notification fires exactly once per credential, on the
+  processing → ready transition, so re-syncing never re-notifies.
+- The bell notification is **best-effort**: it is not retried if delivery fails
+  (e.g. the site's mail delivery is down, the notification type is disabled
+  site-wide, or the recipient is suspended), and a send failure never aborts the
+  sync. The user-menu entry and banner remain the reliable surfaces for any learner
+  who logs in. The report now counts both sent and failed notifications so an
+  administrator can see when a push did not get through. (A learner who has simply
+  turned off the notification for themselves is not a failure — Moodle records that
+  as delivered-and-read.)
+
 ## [1.1.0] - 2026-07-23
 
 ### Fixed
@@ -71,5 +101,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Release pipeline (`deploy.sh` + GitHub Actions) and a `moodle-plugin-ci`
   workflow covering Moodle 4.5 and 5.0.
 
+[1.2.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.1.0
 [1.0.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.0.0

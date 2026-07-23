@@ -53,11 +53,16 @@ local_credentium                 local_credentiumclaim
    then batch-queries the Credentium® API for each credential's claim status
    (`processing` / `issued` / `claimed` / `failed`). Results are cached locally so
    the rest of the plugin never has to call the API on a page load.
-2. **Reminder banner.** On every page, a lightweight hook does one cached,
-   indexed lookup. If the learner has a credential that is `issued` but not yet
-   claimed (and not dismissed), a dismissible banner appears at the top of the
-   page. There is also a persistent **My credentials** entry on the user's
-   profile.
+2. **Learner is told three ways** (a dismissible banner alone was too easy to
+   miss). The moment a credential becomes `issued`:
+   - a **bell notification** (popup + email) is sent once — the canonical Moodle
+     "you have something" surface;
+   - a persistent **My credentials (N)** entry appears in the user menu (avatar
+     dropdown) and does **not** vanish when the banner is dismissed;
+   - a dismissible **banner** appears at the top of every page.
+   All three are backed by one cached, indexed lookup, so a page load never calls
+   the API. The banner honours dismissal; the menu entry and the profile node
+   (both persistent pointers) share a dismiss-independent count.
 3. **Claiming.** When the learner clicks *Claim*, the plugin lazily asks
    Credentium for a **single-use claim link** and opens it in a new tab. The link
    either creates a Credentium Wallet account or logs the learner in, then lands

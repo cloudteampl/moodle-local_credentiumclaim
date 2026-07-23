@@ -32,6 +32,9 @@ class claimable {
     /** @var string Tracking table. */
     public const TABLE = 'local_credentiumclaim_status';
 
+    /** @var string Cache-key prefix for the dismiss-independent claimable count. */
+    private const ALL_CACHE_PREFIX = 'all';
+
     /** @var string Remote status: still being issued. */
     public const STATUS_PROCESSING = 'processing';
     /** @var string Remote status: issued and ready to claim. */
@@ -60,6 +63,48 @@ class claimable {
         $count = self::query_count($userid);
         $cache->set($userid, $count);
         return $count;
+    }
+
+    /**
+     * Cached count of claimable credentials for a user, ignoring the dismissed flag.
+     *
+     * The banner honours "dismissed" so it can be closed; the persistent user-menu
+     * entry deliberately does not, so a learner who dismissed the banner still has a
+     * standing, countable pointer to what they can claim.
+     *
+     * @param int $userid User id.
+     * @return int
+     */
+    public static function count_claimable_for_user(int $userid): int {
+        $cache = \cache::make('local_credentiumclaim', 'claimable');
+        $key = self::ALL_CACHE_PREFIX . $userid;
+        $cached = $cache->get($key);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+        $count = self::query_claimable_count($userid);
+        $cache->set($key, $count);
+        return $count;
+    }
+
+    /**
+     * Uncached count of issued (claimable) credentials, ignoring dismissal.
+     *
+     * @param int $userid User id.
+     * @return int
+     */
+    protected static function query_claimable_count(int $userid): int {
+        global $DB;
+        try {
+            return $DB->count_records_select(
+                self::TABLE,
+                'userid = :userid AND remotestatus = :status',
+                ['userid' => $userid, 'status' => self::STATUS_ISSUED]
+            );
+        } catch (\dml_exception $e) {
+            // Never break page rendering because of this plugin.
+            return 0;
+        }
     }
 
     /**
@@ -185,9 +230,10 @@ class claimable {
      *
      * @param \stdClass $row Existing row (must include id, userid, remotestatus).
      * @param string $status Raw Credentium status.
-     * @return void
+     * @return bool True when the credential has just become claimable (a fresh
+     *              transition into "issued"), so the caller can notify the learner once.
      */
-    public static function apply_remote_status(\stdClass $row, string $status): void {
+    public static function apply_remote_status(\stdClass $row, string $status): bool {
         global $DB;
         $normalized = self::normalize_status($status);
         $now = time();
@@ -197,9 +243,13 @@ class claimable {
             'timechecked' => $now,
             'timemodified' => $now,
         ]);
-        if ($row->remotestatus !== $normalized) {
+        $changed = ($row->remotestatus !== $normalized);
+        if ($changed) {
             self::purge_cache((int) $row->userid);
         }
+        // Only a genuine transition into "issued" is a claim-me moment; polling an
+        // already-issued row again (issued -> issued) must not re-notify.
+        return $changed && $normalized === self::STATUS_ISSUED;
     }
 
     /**
@@ -295,7 +345,10 @@ class claimable {
      * @return void
      */
     public static function purge_cache(int $userid): void {
-        \cache::make('local_credentiumclaim', 'claimable')->delete($userid);
+        $cache = \cache::make('local_credentiumclaim', 'claimable');
+        // Both the dismiss-aware (banner) and dismiss-independent (menu) counts.
+        $cache->delete($userid);
+        $cache->delete(self::ALL_CACHE_PREFIX . $userid);
     }
 
     /**

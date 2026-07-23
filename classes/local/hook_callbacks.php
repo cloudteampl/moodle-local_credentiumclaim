@@ -63,4 +63,44 @@ class hook_callbacks {
         $banner = new \local_credentiumclaim\output\banner($count);
         $hook->add_html($OUTPUT->render_from_template('local_credentiumclaim/banner', $banner->export_for_template($OUTPUT)));
     }
+
+    /**
+     * Add a "My credentials (N)" entry to the user menu (the avatar dropdown).
+     *
+     * Unlike the banner this is not dismissible and does not depend on the "show
+     * banner" setting: it is the standing, always-there pointer so a learner can
+     * always find a credential waiting for them. Shown only when there is at least
+     * one to claim, to avoid a permanent "(0)" cluttering everyone's menu.
+     *
+     * @param \core_user\hook\extend_user_menu $hook The user-menu hook.
+     * @return void
+     */
+    public static function extend_user_menu(\core_user\hook\extend_user_menu $hook): void {
+        global $USER, $CFG;
+
+        if (during_initial_install() || !isloggedin() || isguestuser()) {
+            return;
+        }
+
+        require_once($CFG->dirroot . '/local/credentiumclaim/lib.php');
+        if (!local_credentiumclaim_is_enabled()) {
+            return;
+        }
+
+        if (!has_capability('local/credentiumclaim:claim', \context_user::instance($USER->id))) {
+            return;
+        }
+
+        $count = claimable::count_claimable_for_user((int) $USER->id);
+        if ($count < 1) {
+            return;
+        }
+
+        $hook->add_navitem((object) [
+            'itemtype' => 'link',
+            'url' => new \moodle_url('/local/credentiumclaim/mycredentials.php'),
+            'title' => get_string('nav_mycredentials_count', 'local_credentiumclaim', $count),
+            'titleidentifier' => 'nav_mycredentials_count,local_credentiumclaim',
+        ]);
+    }
 }
