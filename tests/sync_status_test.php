@@ -123,6 +123,59 @@ final class sync_status_test extends \advanced_testcase {
     }
 
     /**
+     * A credential whose course/category resolves to no usable API credentials at all
+     * (e.g. category mode with no global fallback) must still be stamped as checked.
+     *
+     * Without this, it would keep timechecked = 0 forever and, since polling is ordered
+     * by timechecked ASC, permanently occupy the head of the queue on every run.
+     */
+    public function test_unresolvable_credentials_do_not_starve_the_poll_queue(): void {
+        global $DB;
+        if (!\local_credentiumclaim\local\connector_config::is_installed()) {
+            // This path runs through the connector's own resolver, so it needs the
+            // (hard-dependency) plugin present. CI installs it; a bare checkout may not.
+            $this->markTestSkipped('local_credentium is not installed.');
+        }
+        set_config('enabled', 1, 'local_credentiumclaim');
+        set_config('categorymode', 1, 'local_credentium');
+        set_config('apiurl', '', 'local_credentium');
+        set_config('apikey', '', 'local_credentium');
+
+        $course = $this->getDataGenerator()->create_course();
+        $u = $this->getDataGenerator()->create_user();
+
+        // No client is injected: this exercises the real connector_config resolution,
+        // which must fail to find any usable credentials for this course.
+        $task = new class extends \local_credentiumclaim\task\sync_status {
+            /** @var \stdClass[] */
+            public array $source = [];
+
+            /**
+             * Return the canned source issuances (bounded by the limit).
+             *
+             * @param int $limit Maximum rows.
+             * @return \stdClass[]
+             */
+            protected function fetch_source_issuances(int $limit): array {
+                return array_slice($this->source, 0, $limit);
+            }
+        };
+        $task->source = [
+            (object) ['id' => 1, 'userid' => $u->id, 'courseid' => (int) $course->id, 'credentialid' => 'rq-1'],
+        ];
+
+        $this->run_task($task);
+
+        $row = $DB->get_record(claimable::TABLE, ['credentialkey' => 'rq-1'], '*', MUST_EXIST);
+        $this->assertGreaterThan(
+            0,
+            $row->timechecked,
+            'An unresolvable credential must still be stamped as checked, or it would starve the poll queue.'
+        );
+        $this->assertSame('1', get_config('local_credentiumclaim', 'lastrununresolved'));
+    }
+
+    /**
      * Build a sync task with canned source issuances and a canned status map.
      *
      * @param \stdClass[] $source Fake source issuances.

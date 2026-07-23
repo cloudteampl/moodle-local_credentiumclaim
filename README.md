@@ -102,8 +102,20 @@ If the connector runs in **category mode**, each tracked credential is checked
 using the credentials that apply to its course, and the sync issues one batch
 call per distinct key.
 
-Use **Test connection** to verify the inherited credentials against
-`GET /api/credential-template`.
+### Required API key scopes
+
+Credentium® API keys are scoped per capability. The issuing plugin only ever needs
+`templates:read` and `credentials:issue`; this plugin polls statuses and mints
+claim links, which require **`credentials:read`**.
+
+Because the key is now inherited, the connector's key must carry all three scopes.
+If you previously gave this plugin its own narrowly-scoped key, widen the
+connector's key in Credentium® (Organisation Settings → API Keys) before or right
+after upgrading — otherwise status checks return HTTP 401.
+
+**Test connection** probes both scopes and says explicitly which one is missing,
+and the report surfaces the same reason (including the `required_scope` returned
+by the API) rather than a bare "HTTP 401".
 
 ### Report and diagnostics
 

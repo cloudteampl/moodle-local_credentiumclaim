@@ -179,10 +179,16 @@ class sync_status extends \core\task\scheduled_task {
 
         $groups = [];
         $unresolved = 0;
+        $unresolvedids = [];
         foreach ($rows as $row) {
             $config = $this->resolve_config($row);
             if ($config === null) {
                 $unresolved++;
+                // Stamp these too: without it, a credential that can never resolve
+                // credentials (deleted course, unconfigured category, no global
+                // fallback) would keep timechecked = 0 and, being polled in
+                // timechecked ASC order, permanently occupy the head of the queue.
+                $unresolvedids[] = (int) $row->id;
                 continue;
             }
             $groupkey = sha1($config->apiurl . "\0" . $config->apikey);
@@ -191,6 +197,7 @@ class sync_status extends \core\task\scheduled_task {
             }
             $groups[$groupkey]['rows'][] = $row;
         }
+        claimable::mark_checked($unresolvedids);
 
         $polled = 0;
         $updated = 0;

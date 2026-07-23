@@ -59,7 +59,10 @@ if (!local_credentiumclaim_is_enabled()) {
     $messagetype = \core\output\notification::NOTIFY_ERROR;
 } else {
     try {
-        $client = new client();
+        // Category mode may issue this credential with credentials that differ
+        // from the global ones, so resolve them the same way the sync task does.
+        $courseid = isset($row->courseid) && $row->courseid !== null ? (int) $row->courseid : null;
+        $client = client::for_course($courseid);
         if (!$client->is_configured()) {
             $message = get_string('claim_error', 'local_credentiumclaim');
             $messagetype = \core\output\notification::NOTIFY_ERROR;

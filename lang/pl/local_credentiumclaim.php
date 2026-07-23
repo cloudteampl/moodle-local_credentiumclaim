@@ -118,5 +118,7 @@ $string['testconnection'] = 'Testuj połączenie';
 $string['testconnection_disabled'] = 'Przed testem połączenia skonfiguruj adres URL API i klucz we wtyczce Integracja Credentium®.';
 $string['testconnection_fail'] = 'Połączenie nieudane. Sprawdź adres URL API i klucz we wtyczce Integracja Credentium®.';
 $string['testconnection_heading'] = 'Test połączenia z Credentium®';
+$string['testconnection_readscope_fail'] = 'Klucz API został zaakceptowany, ale nie może odczytywać statusów poświadczeń. Ta wtyczka wymaga zakresu credentials:read, którego wtyczka wystawiająca nie potrzebuje — dodaj go do klucza w Credentium®. Szczegóły: {$a}';
+$string['testconnection_readscope_ok'] = 'Klucz API może odczytywać statusy poświadczeń (zakres credentials:read jest obecny).';
 $string['testconnection_success'] = 'Połączenie udane. API Credentium® odpowiedziało, a klucz API jest prawidłowy.';
 $string['testconnection_templatecount'] = 'API zwróciło szablonów poświadczeń: {$a}.';

@@ -17,6 +17,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The status report rendered its heading twice: the page heading was overridden
   after `admin_externalpage_setup()` and then printed again in the page body.
 
+### Upgrade note
+- Because the API key is now inherited, **the connector's key must include the
+  `credentials:read` scope** (the issuing plugin itself only needs
+  `templates:read` and `credentials:issue`). If this plugin previously used its
+  own, narrowly-scoped key, widen the connector's key in Credentium® — otherwise
+  status checks return HTTP 401. Test connection and the report now name the
+  missing scope explicitly.
+
 ### Changed
 - **The API URL and key are no longer configured here.** Both are inherited from
   the required `local_credentium` (Credentium® Integration) plugin, so a key is

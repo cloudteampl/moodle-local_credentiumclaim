@@ -44,6 +44,8 @@ try {
     $task->execute();
 } catch (Throwable $e) {
     ob_end_clean();
+    // The message below tells the admin to check the logs, so put something there.
+    debugging('[CredentiumClaim] Manual status check failed: ' . $e->getMessage(), DEBUG_NORMAL);
     redirect(
         $returnurl,
         get_string('report_checknow_failed', 'local_credentiumclaim'),

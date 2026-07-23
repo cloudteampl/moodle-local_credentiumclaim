@@ -298,6 +298,14 @@ class client {
         }
 
         $this->lasterror = 'HTTP ' . $httpcode . ' from ' . $method . ' ' . $path;
+        $reason = $this->extract_error_reason($responsebody);
+        if ($reason !== null) {
+            // Every documented error shape has a plain-text reason, and a 401 caused by
+            // scope may name the missing scope (e.g. "required_scope": "credentials:read").
+            // Neither field is documented as ever carrying a secret, but it is still run
+            // through the same redaction as everything else logged or shown to admins.
+            $this->lasterror .= ': ' . $this->sanitize_for_log($reason);
+        }
 
         // Non-2xx: log a sanitised summary and throw without leaking secrets.
         local_credentiumclaim_log('API request failed', [
@@ -308,6 +316,32 @@ class client {
         ]);
         $debuginfo = 'HTTP ' . $httpcode . ' for ' . $path;
         throw new \moodle_exception('apierror', 'local_credentiumclaim', '', null, $debuginfo);
+    }
+
+    /**
+     * Pull a human-readable reason out of a Credentium error envelope, when present.
+     *
+     * Every documented error shape (validation, not-found, and the legacy auth shapes)
+     * carries a plain-text `error` field, and an insufficient-scope 401 adds
+     * `required_scope` naming the missing permission — turning "HTTP 401" into an
+     * actionable diagnostic (e.g. an inherited key that can issue but not read).
+     *
+     * @param mixed $responsebody Raw response body.
+     * @return string|null Null when the body has no recognisable reason.
+     */
+    private function extract_error_reason($responsebody): ?string {
+        if (!is_string($responsebody) || $responsebody === '') {
+            return null;
+        }
+        $decoded = json_decode($responsebody);
+        if (!is_object($decoded) || !isset($decoded->error) || !is_string($decoded->error)) {
+            return null;
+        }
+        $reason = $decoded->error;
+        if (!empty($decoded->required_scope) && is_string($decoded->required_scope)) {
+            $reason .= ' (required scope: ' . $decoded->required_scope . ')';
+        }
+        return $reason;
     }
 
     /**

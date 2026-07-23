@@ -118,5 +118,7 @@ $string['testconnection'] = 'Test connection';
 $string['testconnection_disabled'] = 'Configure the API URL and key in the Credentium® Integration plugin before testing the connection.';
 $string['testconnection_fail'] = 'Connection failed. Check the API URL and key in the Credentium® Integration plugin.';
 $string['testconnection_heading'] = 'Credentium® connection test';
+$string['testconnection_readscope_fail'] = 'The API key was accepted but cannot read credential statuses. This plugin needs the credentials:read scope, which the issuing plugin does not require — add it to the key in Credentium®. Details: {$a}';
+$string['testconnection_readscope_ok'] = 'The API key can read credential statuses (credentials:read scope present).';
 $string['testconnection_success'] = 'Connection successful. The Credentium® API responded and the API key is valid.';
 $string['testconnection_templatecount'] = 'The API returned {$a} credential template(s).';

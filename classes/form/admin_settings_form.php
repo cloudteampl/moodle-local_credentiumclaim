@@ -89,6 +89,7 @@ class admin_settings_form extends \moodleform {
             $intervals = ['' => get_string('syncinterval_custom', 'local_credentiumclaim')] + $intervals;
         }
         $mform->addElement('select', 'syncinterval', get_string('syncinterval', 'local_credentiumclaim'), $intervals);
+        $mform->setType('syncinterval', PARAM_INT);
         $mform->addHelpButton('syncinterval', 'syncinterval', 'local_credentiumclaim');
         $mform->hideIf('syncinterval', 'enabled', 'notchecked');
 

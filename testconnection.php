@@ -56,6 +56,25 @@ try {
             'p',
             get_string('testconnection_templatecount', 'local_credentiumclaim', count($templates))
         );
+
+        // The template probe only proves the templates:read scope, which the issuing
+        // plugin needs. This plugin lives on credentials:read, so probe that too —
+        // otherwise an inherited key that can issue but not read would test "successful"
+        // and then fail on every status check. A status query for an id that cannot
+        // exist is answered with an empty result set, so this costs nothing.
+        $client->get_status_batch(['00000000-0000-0000-0000-000000000000']);
+        $readerror = $client->get_last_error();
+        if ($readerror === null) {
+            echo $OUTPUT->notification(
+                get_string('testconnection_readscope_ok', 'local_credentiumclaim'),
+                \core\output\notification::NOTIFY_SUCCESS
+            );
+        } else {
+            echo $OUTPUT->notification(
+                get_string('testconnection_readscope_fail', 'local_credentiumclaim', s($readerror)),
+                \core\output\notification::NOTIFY_ERROR
+            );
+        }
     }
 } catch (moodle_exception $e) {
     // Covers both a bad stored URL (constructor) and an API/auth failure.

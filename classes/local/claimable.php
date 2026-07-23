@@ -158,7 +158,14 @@ class claimable {
             'timemodified' => $now,
             'timechecked' => 0,
         ];
-        $DB->insert_record(self::TABLE, $record);
+        try {
+            $DB->insert_record(self::TABLE, $record);
+        } catch (\dml_write_exception $e) {
+            // A concurrent run (cron and the manual "Check status now" can overlap)
+            // inserted the same credential between the check above and this insert.
+            // The unique key on (userid, credentialkey) makes that harmless.
+            return false;
+        }
         self::purge_cache($userid);
         return true;
     }

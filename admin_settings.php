@@ -36,7 +36,8 @@ $config->enabled = get_config('local_credentiumclaim', 'enabled');
 $showbanner = get_config('local_credentiumclaim', 'showbanner');
 $config->showbanner = ($showbanner === false) ? 1 : $showbanner;
 $config->debuglog = get_config('local_credentiumclaim', 'debuglog');
-$config->syncinterval = local_credentiumclaim_get_sync_interval();
+// Null means the cron schedule was hand-edited; '' selects the "custom" option.
+$config->syncinterval = local_credentiumclaim_get_sync_interval() ?? '';
 $mform->set_data($config);
 
 if ($mform->is_cancelled()) {
@@ -47,7 +48,7 @@ if ($mform->is_cancelled()) {
     set_config('debuglog', !empty($data->debuglog) ? 1 : 0, 'local_credentiumclaim');
 
     // An empty interval means "leave the hand-edited cron schedule alone".
-    if (isset($data->syncinterval) && $data->syncinterval !== '') {
+    if (!empty($data->syncinterval)) {
         local_credentiumclaim_apply_sync_interval((int) $data->syncinterval);
     }
 

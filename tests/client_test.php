@@ -218,6 +218,21 @@ final class client_test extends \advanced_testcase {
         $this->assertStringContainsString('404', $client->get_last_error());
     }
 
+    public function test_failed_batch_surfaces_missing_scope(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [401, json_encode([
+            'error' => 'Invalid API key or insufficient permissions',
+            'required_scope' => 'credentials:read',
+        ]), []];
+
+        $client->get_status_batch(['a']);
+
+        // A key inherited from a plugin that only issues (not reads) credentials
+        // must be diagnosable from the report, not just "HTTP 401".
+        $this->assertStringContainsString('credentials:read', $client->get_last_error());
+        $this->assertStringContainsString('insufficient permissions', $client->get_last_error());
+    }
+
     public function test_non_2xx_throws_apierror_without_leaking_secret(): void {
         $client = $this->make_client();
         $client->handler = fn($m, $u, $b) => [500, json_encode([
