@@ -231,6 +231,42 @@ final class client_test extends \advanced_testcase {
         // must be diagnosable from the report, not just "HTTP 401".
         $this->assertStringContainsString('credentials:read', $client->get_last_error());
         $this->assertStringContainsString('insufficient permissions', $client->get_last_error());
+        $this->assertTrue($client->last_error_was_auth());
+    }
+
+    public function test_non_auth_failure_is_not_reported_as_an_auth_problem(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [500, 'Internal Server Error', []];
+
+        $client->get_status_batch(['a']);
+
+        // Advice to widen the API key's scope must not be given for a server outage.
+        $this->assertNotNull($client->get_last_error());
+        $this->assertFalse($client->last_error_was_auth());
+    }
+
+    public function test_a_later_successful_chunk_does_not_mask_an_earlier_auth_failure(): void {
+        $client = $this->make_client();
+        $calls = 0;
+        $client->handler = function ($method, $url, $body) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return [401, json_encode(['error' => 'Invalid API key or insufficient permissions']), []];
+            }
+            return [200, json_encode(['results' => []]), []];
+        };
+
+        // 501 ids split into two chunks: the first is refused, the second succeeds.
+        $ids = [];
+        for ($i = 0; $i < 501; $i++) {
+            $ids[] = 'id' . $i;
+        }
+        $client->get_status_batch($ids);
+
+        $this->assertTrue(
+            $client->last_error_was_auth(),
+            'The status must belong to the failing response, not to whatever came last.'
+        );
     }
 
     public function test_non_2xx_throws_apierror_without_leaking_secret(): void {

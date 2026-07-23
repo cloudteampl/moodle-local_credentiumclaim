@@ -72,7 +72,7 @@ class client {
     /** @var string|null Technical description of the most recent failure. */
     private $lasterror = null;
 
-    /** @var int|null HTTP status of the most recent response. */
+    /** @var int|null HTTP status of the response that produced $lasterror. */
     private $lasthttpstatus = null;
 
     /** @var int Identifiers submitted to the batch status endpoint in the last call. */
@@ -145,6 +145,8 @@ class client {
      * @return bool
      */
     public function last_error_was_auth(): bool {
+        // Paired with $lasterror rather than with the last response, so a later
+        // successful batch chunk cannot mask an earlier 401.
         return $this->lasterror !== null && $this->lasthttpstatus === 401;
     }
 
@@ -300,7 +302,6 @@ class client {
         unset($info);
 
         $path = parse_url($url, PHP_URL_PATH);
-        $this->lasthttpstatus = $httpcode;
 
         if ($httpcode >= 200 && $httpcode < 300) {
             if ($responsebody === null || $responsebody === false || $responsebody === '') {
@@ -309,12 +310,14 @@ class client {
             $decoded = json_decode($responsebody);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $this->lasterror = 'Invalid JSON response from ' . $path;
+                $this->lasthttpstatus = $httpcode;
                 throw new \moodle_exception('error:invalidjsonresponse', 'local_credentiumclaim');
             }
             return $decoded;
         }
 
         $this->lasterror = 'HTTP ' . $httpcode . ' from ' . $method . ' ' . $path;
+        $this->lasthttpstatus = $httpcode;
         $reason = $this->extract_error_reason($responsebody);
         if ($reason !== null) {
             // Every documented error shape has a plain-text reason, and a 401 caused by
