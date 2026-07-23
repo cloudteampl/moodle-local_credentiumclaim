@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-23
+
+### Added
+- **Made a ready credential impossible to miss.** A dismissible banner on its own
+  was too easy to overlook, so a learner with a credential to claim is now reached
+  three ways:
+  - a **bell notification** (popup + email, per the learner's messaging
+    preferences), sent once at the moment a credential becomes ready to claim;
+  - a persistent **"My credentials (N)"** entry in the user menu (the avatar
+    dropdown), shown whenever there is something to claim — and, unlike the banner,
+    it does **not** disappear when the banner is dismissed;
+  - the existing top-of-page banner.
+- The profile "My credentials" node and the user-menu entry share one
+  dismiss-independent count, so a learner who closed the banner still has a
+  standing, accurate pointer to what is waiting for them.
+
+### Notes
+- All three surfaces reflect the **"Ready to claim"** state only, matching the
+  banner. A credential that is still being prepared, or already claimed, is not
+  advertised. The bell notification fires exactly once per credential, on the
+  processing → ready transition, so re-syncing never re-notifies.
+
 ## [1.1.0] - 2026-07-23
 
 ### Fixed
@@ -71,5 +93,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Release pipeline (`deploy.sh` + GitHub Actions) and a `moodle-plugin-ci`
   workflow covering Moodle 4.5 and 5.0.
 
+[1.2.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.1.0
 [1.0.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.0.0

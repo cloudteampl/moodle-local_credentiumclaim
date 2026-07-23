@@ -27,6 +27,7 @@ namespace local_credentiumclaim\task;
 use local_credentiumclaim\api\client;
 use local_credentiumclaim\local\claimable;
 use local_credentiumclaim\local\connector_config;
+use local_credentiumclaim\local\notifier;
 
 /**
  * Discovers issued credentials from local_credentium and polls Credentium for their claim status.
@@ -221,15 +222,22 @@ class sync_status extends \core\task\scheduled_task {
             $statuses = $client->get_status_batch(array_keys($keys));
 
             $unreported = [];
+            $notified = 0;
             foreach ($group['rows'] as $row) {
                 $polled++;
                 if (isset($statuses[$row->credentialkey])) {
-                    claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
+                    $becameready = claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
+                    if ($becameready && notifier::credential_ready($row)) {
+                        $notified++;
+                    }
                     $updated++;
                 } else {
                     $unmatched++;
                     $unreported[] = (int) $row->id;
                 }
+            }
+            if ($notified > 0) {
+                mtrace('Notified ' . $notified . ' learner(s) of a newly claimable credential.');
             }
             // Stamp the ones the API stayed silent about so the poll queue keeps moving.
             claimable::mark_checked($unreported);

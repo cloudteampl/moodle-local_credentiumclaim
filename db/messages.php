@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version information for the local_credentiumclaim plugin.
+ * Message providers for the local_credentiumclaim plugin.
  *
  * @package    local_credentiumclaim
  * @copyright  2025 CloudTeam Sp. z o.o.
@@ -24,12 +24,12 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_credentiumclaim';
-$plugin->version = 2026072301;
-$plugin->requires = 2024100700; // Moodle 4.5.0 (the banner + user-menu hooks need the 4.4+ Hooks API).
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.2.0';
-$plugin->supported = [405, 500]; // Moodle 4.5 to 5.0.
-$plugin->dependencies = [
-    'local_credentium' => ANY_VERSION,
+$messageproviders = [
+    // Sent to a learner when one of their credentials becomes ready to claim.
+    'credentialready' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
 ];

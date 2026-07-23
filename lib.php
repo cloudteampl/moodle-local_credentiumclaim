@@ -175,9 +175,11 @@ function local_credentiumclaim_myprofile_navigation(\core_user\output\myprofile\
     }
 
     $label = get_string('nav_mycredentials', 'local_credentiumclaim');
-    $count = \local_credentiumclaim\local\claimable::count_for_user((int) $user->id);
+    // A persistent pointer like the user-menu entry, so it counts claimable credentials
+    // regardless of whether the banner was dismissed.
+    $count = \local_credentiumclaim\local\claimable::count_claimable_for_user((int) $user->id);
     if ($count > 0) {
-        $label .= ' (' . $count . ')';
+        $label = get_string('nav_mycredentials_count', 'local_credentiumclaim', $count);
     }
 
     $node = new \core_user\output\myprofile\node(
