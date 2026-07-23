@@ -69,10 +69,17 @@ try {
                 get_string('testconnection_readscope_ok', 'local_credentiumclaim'),
                 \core\output\notification::NOTIFY_SUCCESS
             );
-        } else {
+        } else if ($client->last_error_was_auth()) {
+            // Only a 401 justifies "widen the key's scope"; a timeout or a 500 would
+            // send the admin off editing a key that was never the problem.
             echo $OUTPUT->notification(
                 get_string('testconnection_readscope_fail', 'local_credentiumclaim', s($readerror)),
                 \core\output\notification::NOTIFY_ERROR
+            );
+        } else {
+            echo $OUTPUT->notification(
+                get_string('testconnection_readscope_error', 'local_credentiumclaim', s($readerror)),
+                \core\output\notification::NOTIFY_WARNING
             );
         }
     }

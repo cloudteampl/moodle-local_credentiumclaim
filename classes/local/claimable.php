@@ -167,7 +167,11 @@ class claimable {
             // Anything else is a real write failure and must not vanish silently.
             if (!$DB->record_exists(self::TABLE, ['userid' => $userid, 'credentialkey' => $credentialkey])) {
                 require_once(__DIR__ . '/../../lib.php');
-                local_credentiumclaim_log('Failed to track credential', ['userid' => $userid]);
+                local_credentiumclaim_log('Failed to track credential', [
+                    'userid' => $userid,
+                    'credentialkey' => $credentialkey,
+                    'error' => $e->getMessage(),
+                ]);
                 throw $e;
             }
             return false;

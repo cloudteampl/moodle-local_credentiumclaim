@@ -29,6 +29,7 @@ namespace local_credentiumclaim;
  *
  * @covers ::local_credentiumclaim_apply_sync_interval
  * @covers ::local_credentiumclaim_get_sync_interval
+ * @covers ::local_credentiumclaim_sync_lock_resource
  */
 final class sync_interval_test extends \advanced_testcase {
     public function setUp(): void {
@@ -83,6 +84,17 @@ final class sync_interval_test extends \advanced_testcase {
             local_credentiumclaim_get_sync_interval(),
             'A schedule that is not a simple interval must not be misreported as one.'
         );
+    }
+
+    public function test_manual_run_locks_the_same_resource_as_cron(): void {
+        global $DB;
+
+        // Cron locks on the classname exactly as stored in task_scheduled. Look it up
+        // by component (this plugin registers exactly one task) so the assertion cannot
+        // pass by simply restating the derivation it is meant to check.
+        $stored = $DB->get_field('task_scheduled', 'classname', ['component' => 'local_credentiumclaim'], MUST_EXIST);
+
+        $this->assertSame($stored, local_credentiumclaim_sync_lock_resource());
     }
 
     public function test_applying_an_interval_marks_the_task_customised(): void {

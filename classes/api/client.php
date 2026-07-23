@@ -72,6 +72,9 @@ class client {
     /** @var string|null Technical description of the most recent failure. */
     private $lasterror = null;
 
+    /** @var int|null HTTP status of the most recent response. */
+    private $lasthttpstatus = null;
+
     /** @var int Identifiers submitted to the batch status endpoint in the last call. */
     private $lastrequested = 0;
 
@@ -134,6 +137,18 @@ class client {
     }
 
     /**
+     * Whether the most recent failure was an authentication/authorisation refusal.
+     *
+     * Lets callers tell "this key may not read statuses" (actionable: widen the key's
+     * scope) apart from "the API was unreachable", which needs entirely different advice.
+     *
+     * @return bool
+     */
+    public function last_error_was_auth(): bool {
+        return $this->lasterror !== null && $this->lasthttpstatus === 401;
+    }
+
+    /**
      * Identifier counts from the most recent {@see self::get_status_batch()} call.
      *
      * A `returned` lower than `requested` means Credentium did not recognise some
@@ -155,6 +170,7 @@ class client {
         $ids = array_values(array_unique(array_filter(array_map('strval', $issuerequestids), 'strlen')));
         $result = [];
         $this->lasterror = null;
+        $this->lasthttpstatus = null;
         $this->lastrequested = count($ids);
         $this->lastreturned = 0;
         foreach (array_chunk($ids, self::BATCH_MAX) as $chunk) {
@@ -284,6 +300,7 @@ class client {
         unset($info);
 
         $path = parse_url($url, PHP_URL_PATH);
+        $this->lasthttpstatus = $httpcode;
 
         if ($httpcode >= 200 && $httpcode < 300) {
             if ($responsebody === null || $responsebody === false || $responsebody === '') {

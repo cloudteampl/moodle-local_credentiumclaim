@@ -39,7 +39,7 @@ $task = new sync_status();
 // manual run cannot overlap a scheduled one. Without it both could discover the
 // same credentials concurrently and race on the (userid, credentialkey) unique key.
 $cronlockfactory = \core\lock\lock_config::get_lock_factory('cron');
-$lock = $cronlockfactory->get_lock(ltrim(sync_status::class, '\\'), 5);
+$lock = $cronlockfactory->get_lock(local_credentiumclaim_sync_lock_resource(), 5);
 if (!$lock) {
     redirect(
         $returnurl,

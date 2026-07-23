@@ -63,6 +63,21 @@ function local_credentiumclaim_get_sync_task() {
 }
 
 /**
+ * The lock resource cron uses for the status-check task.
+ *
+ * Must match byte-for-byte what \core\task\manager uses, or a manual run would take a
+ * different lock and happily overlap a scheduled one. Core stores and looks up
+ * task_scheduled.classname through get_canonical_class_name() (which prepends a
+ * backslash) and locks on that stored value, so derive it the same way rather than
+ * hand-building the string. Covered by a test that compares it to the stored record.
+ *
+ * @return string Lock resource name.
+ */
+function local_credentiumclaim_sync_lock_resource() {
+    return \core\task\manager::get_canonical_class_name('local_credentiumclaim\task\sync_status');
+}
+
+/**
  * Selectable status-check intervals, in minutes, keyed by minutes.
  *
  * Every option divides evenly into an hour (or is a whole number of hours) so it maps
