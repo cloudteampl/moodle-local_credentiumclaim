@@ -59,7 +59,8 @@ try {
     $task->execute();
 } catch (Throwable $e) {
     $failed = true;
-    // The message below tells the admin to check the logs, so put something there.
+    // Surfaced through Moodle's debugging channel; the redirect message tells the
+    // admin to turn debugging on rather than promising a log that may not exist.
     debugging('[CredentiumClaim] Manual status check failed: ' . $e->getMessage(), DEBUG_NORMAL);
 }
 ob_end_clean();

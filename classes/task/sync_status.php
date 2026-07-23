@@ -102,8 +102,15 @@ class sync_status extends \core\task\scheduled_task {
             return;
         }
 
-        $this->discover();
-        $this->poll();
+        try {
+            $this->discover();
+            $this->poll();
+        } catch (\Throwable $e) {
+            // Polling records its own outcome, but a hard failure anywhere would leave
+            // the report showing the previous run's result as if it were current.
+            $this->record_run(self::RESULT_ERROR, ['error' => $e->getMessage()]);
+            throw $e;
+        }
     }
 
     /**
