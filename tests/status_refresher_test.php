@@ -56,7 +56,7 @@ final class status_refresher_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'key-1', null, null);
         claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued');
-        // apply_remote_status() just stamped timechecked = now: within the throttle.
+        // The apply_remote_status() call just stamped timechecked = now: within the throttle.
 
         $applied = $this->make_refresher(['key-1' => 'claimed'])->refresh_for_user((int) $user->id);
 
@@ -103,8 +103,11 @@ final class status_refresher_test extends \advanced_testcase {
         $this->assertSame(0, $applied);
         $row = $this->row($user->id, 'key-unknown');
         $this->assertSame('processing', $row->remotestatus);
-        $this->assertGreaterThan(0, (int) $row->timechecked,
-            'An unreported row must be stamped so reloads cannot hammer the API.');
+        $this->assertGreaterThan(
+            0,
+            (int) $row->timechecked,
+            'An unreported row must be stamped so reloads cannot hammer the API.'
+        );
     }
 
     public function test_an_exploding_client_never_breaks_the_page(): void {
