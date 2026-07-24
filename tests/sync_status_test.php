@@ -55,9 +55,10 @@ final class sync_status_test extends \advanced_testcase {
 
         // Credential rq-1 is issued => banner-worthy for u1.
         $this->assertSame(1, claimable::count_for_user($u1->id));
-        // Credential rq-2 is claimed => nothing to claim for u2.
+        // Credential rq-2 is claimed => nothing left for u2 to claim, though it stays
+        // on their page so they can open it in the wallet again.
         $this->assertSame(0, claimable::count_for_user($u2->id));
-        $this->assertCount(0, claimable::list_for_user($u2->id));
+        $this->assertCount(1, claimable::list_for_user($u2->id));
     }
 
     public function test_the_sync_stores_the_credential_id_the_api_reports(): void {

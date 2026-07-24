@@ -49,7 +49,10 @@ final class status_refresher_test extends \advanced_testcase {
 
         $this->assertSame(1, $applied);
         $this->assertSame('claimed', $this->row($user->id, 'key-1')->remotestatus);
-        $this->assertCount(0, claimable::list_for_user((int) $user->id), 'A claimed credential must drop off the page.');
+        // Still listed — the page is a record of what a learner earned, not a to-do
+        // list — but no longer counted as something waiting to be claimed.
+        $this->assertSame(0, claimable::count_claimable_for_user((int) $user->id));
+        $this->assertCount(1, claimable::list_for_user((int) $user->id));
     }
 
     public function test_recently_checked_rows_are_not_repolled(): void {
