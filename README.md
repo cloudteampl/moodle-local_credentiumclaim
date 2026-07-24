@@ -95,7 +95,7 @@ Site administration → Plugins → Local plugins → **Credentium® Claim**:
 | API connection | **Read-only.** Endpoint and key inherited from the Credentium® Integration plugin. |
 | Status check interval | How often the sync task runs (5 min – 4 h). Rewrites the task's cron schedule. |
 | Show reminder banner | Whether to show the top-of-page banner. |
-| Credentium® Wallet address | Where a claimed credential opens. Normally left empty — see below. |
+| Credentium® Wallet address | Base address of the wallet, where claimed credentials link to. Normally left empty — see below. |
 | Enable debug logging | Writes secret-free diagnostics to the server log. |
 
 There is deliberately **no API URL or API key field here.** Both are inherited

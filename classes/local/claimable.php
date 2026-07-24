@@ -414,7 +414,7 @@ class claimable {
         if (\core_text::strlen($credentialid) > self::CREDENTIALID_MAX) {
             // Longer than the column: storing it would throw and abort the whole poll
             // for a value that cannot be a Credentium identifier anyway. Truncating
-            // would be worse still — it would build a wallet link to nowhere.
+            // would keep a value that no longer identifies anything.
             require_once(__DIR__ . '/../../lib.php');
             local_credentiumclaim_log('Ignoring an oversized credentialId', ['rowid' => (int) $row->id]);
             return;
