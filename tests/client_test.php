@@ -406,9 +406,48 @@ final class client_test extends \advanced_testcase {
             'unauthorised' => [401, \local_credentiumclaim\api\client::FAIL_AUTH],
             'forbidden' => [403, \local_credentiumclaim\api\client::FAIL_AUTH],
             'not found' => [404, \local_credentiumclaim\api\client::FAIL_CLIENT],
+            'request timeout' => [408, \local_credentiumclaim\api\client::FAIL_BUSY],
+            'rate limited' => [429, \local_credentiumclaim\api\client::FAIL_BUSY],
             'server error' => [500, \local_credentiumclaim\api\client::FAIL_SERVER],
             'gateway timeout' => [504, \local_credentiumclaim\api\client::FAIL_SERVER],
         ];
+    }
+
+    public function test_a_deadline_stops_the_retrying(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [500, '', []];
+        // Already expired: there is no room to wait and try again.
+        $client->set_deadline(microtime(true) - 1);
+
+        $client->get_status_batch(['a']);
+
+        $this->assertCount(1, $client->requests, 'A deadline must outrank the attempt count.');
+        $this->assertSame([], $client->waits);
+    }
+
+    public function test_a_deadline_stops_a_multi_chunk_batch_and_reports_the_remainder(): void {
+        $client = $this->make_client();
+        $client->handler = function ($method, $url, $body) use (&$client) {
+            // The first chunk consumes the whole budget.
+            $client->set_deadline(microtime(true) - 1);
+            $ids = json_decode($body)->issueRequestIds;
+            $results = array_map(fn($id) => ['issueRequestId' => $id, 'status' => 'issued'], $ids);
+            return [200, json_encode(['results' => $results]), []];
+        };
+        $client->set_deadline(microtime(true) + 60);
+
+        $ids = [];
+        for ($i = 0; $i < 501; $i++) {
+            $ids[] = 'id' . $i;
+        }
+        $map = $client->get_status_batch($ids);
+
+        // Retry ladders live inside the chunk loop, so a budget checked only by the
+        // caller before the whole batch would be blown by a second chunk.
+        $this->assertCount(1, $client->requests, 'The second chunk must not be started.');
+        $this->assertCount(500, $map, 'The first chunk still counts.');
+        $this->assertSame(['id500'], $client->get_last_unanswered_ids());
+        $this->assertNotNull($client->get_last_error());
     }
 
     public function test_no_answer_is_distinguished_from_an_unrecognised_identifier(): void {

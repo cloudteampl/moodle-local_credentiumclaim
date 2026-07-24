@@ -160,11 +160,14 @@ retried.
 
 Retrying is bounded twice over: once the service or the route to it has failed,
 the remaining credential groups in the same run stop retrying, and the polling
-phase as a whole runs under a wall-clock budget. A site running the connector in
-category mode — one API key per category, so one batch call per key — therefore
-cannot stretch a single run past the time limit a manual **Check status now** is
-given. Whatever the budget cuts short keeps its older `timechecked` and is first
-in the queue on the next run.
+phase as a whole runs under a wall-clock budget. That budget is enforced inside
+the API client — per attempt and per batch chunk, not merely once per group — so
+no call is started that the remaining time cannot finish, and the bound does not
+have to be re-derived whenever a retry constant changes. A site running the
+connector in category mode (one API key per category, so one batch call per key)
+therefore cannot stretch a single run past the time limit a manual **Check status
+now** is given. Whatever the budget cuts short keeps its older `timechecked` and
+is first in the queue on the next run, and is reported as still pending.
 
 Retrying belongs to the scheduled task only: the page-load refresh a learner
 triggers makes exactly one attempt and otherwise falls back to the last known

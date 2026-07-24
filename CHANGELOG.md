@@ -21,9 +21,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   refusals (the other `4xx`) are never retried: repeating them would only add
   load and delay the real answer. Once the service, the rate limit or the route
   to it has failed, the remaining credential groups in the same run stop
-  retrying, and the whole polling phase now runs under a wall-clock budget — so
-  category mode with many API keys cannot stretch one run past the time limit a
-  manual "Check status now" is given.
+  retrying, and the whole polling phase now runs under a wall-clock budget that
+  the API client enforces per attempt and per batch chunk — so category mode with
+  many API keys cannot stretch one run past the time limit a manual "Check status
+  now" is given, whatever the retry constants are later set to. Credentials the
+  budget cuts short are left unstamped, so they are first in the next run's queue,
+  and are reported as still pending.
 - **An API outage is no longer reported as "Credentium did not recognise these
   identifiers".** A failed batch call and an identifier Credentium genuinely
   does not know both leave the status missing, and the report counted them the

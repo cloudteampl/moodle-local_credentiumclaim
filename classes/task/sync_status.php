@@ -45,16 +45,18 @@ class sync_status extends \core\task\scheduled_task {
      *
      * Row and batch limits bound how much work a run takes on, but not how long an
      * unresponsive API can make that work last: in category mode the run costs one
-     * batch call per distinct key, and each of those can burn the full HTTP timeout.
-     * syncnow.php raises the PHP time limit to 300s for a manual run, so without a
-     * budget a wide-enough site could hit it mid-poll and die instead of redirecting
-     * with a diagnosis. Whatever is left unpolled keeps its older timechecked and is
-     * therefore first in the queue on the next run.
+     * batch call per distinct key, each of those splits into chunks, and each chunk
+     * brings its own retry ladder. syncnow.php raises the PHP time limit to 300s for
+     * a manual run, so without a budget a wide-enough site could hit it mid-poll and
+     * die instead of redirecting with a diagnosis.
+     *
+     * The deadline is handed to the client, which refuses to start an attempt the
+     * remaining time cannot finish, so the overshoot is one rounding second rather
+     * than a figure that has to be re-derived whenever a retry constant changes.
+     * Whatever is left unpolled keeps its older timechecked and is therefore first
+     * in the queue on the next run.
      */
     protected const POLL_BUDGET = 150;
-
-    /** @var int Ceiling for one batch call's HTTP timeout, in seconds. */
-    protected const TIMEOUT = 30;
 
     /** @var string Run outcome: the sync completed (possibly with nothing to do). */
     public const RESULT_OK = 'ok';
@@ -241,8 +243,7 @@ class sync_status extends \core\task\scheduled_task {
         $deadline = microtime(true) + self::POLL_BUDGET;
 
         foreach ($groups as $group) {
-            $remaining = $deadline - microtime(true);
-            if ($remaining <= 0) {
+            if (microtime(true) >= $deadline) {
                 // Out of budget. These rows are deliberately left unstamped: their older
                 // timechecked puts them at the head of the next run's queue.
                 $unanswered += count($group['rows']);
@@ -253,8 +254,9 @@ class sync_status extends \core\task\scheduled_task {
             if ($degraded) {
                 $client->set_max_attempts(1);
             }
-            // Never let one group wait longer than the whole poll has left.
-            $client->set_timeout((int) min(self::TIMEOUT, max(1, ceil($remaining))));
+            // The client enforces the deadline per attempt and per batch chunk, so the
+            // bound holds however many chunks and retries a group turns out to need.
+            $client->set_deadline($deadline);
 
             $keys = [];
             foreach ($group['rows'] as $row) {

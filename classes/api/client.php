@@ -89,6 +89,9 @@ class client {
     /** @var int Attempts per request for this instance, including the first. */
     private $maxattempts = self::ATTEMPTS;
 
+    /** @var float|null Wall-clock deadline (microtime) for all work by this instance. */
+    private $deadline = null;
+
     /** @var string|null Base API URL. */
     private $apiurl;
 
@@ -177,6 +180,57 @@ class client {
     }
 
     /**
+     * Give this client a wall-clock deadline for everything it does.
+     *
+     * Attempt counts and per-call timeouts bound one HTTP call, not the total: a
+     * batch splits into chunks, and every chunk brings its own retry ladder, so a
+     * caller working to a time limit cannot derive its worst case from those alone
+     * without re-deriving it whenever a constant changes. With a deadline the bound
+     * is structural: no attempt is started that the remaining time cannot finish,
+     * no retry is waited out that would cross it, and chunks left over are reported
+     * as unanswered rather than quietly missing.
+     *
+     * @param float|null $deadline microtime(true) value, or null for no limit.
+     * @return void
+     */
+    public function set_deadline(?float $deadline): void {
+        $this->deadline = $deadline;
+    }
+
+    /**
+     * Seconds left before the deadline, or null when there is no deadline.
+     *
+     * @return float|null
+     */
+    private function seconds_left(): ?float {
+        return $this->deadline === null ? null : $this->deadline - microtime(true);
+    }
+
+    /**
+     * The timeout for the next attempt, never longer than the deadline allows.
+     *
+     * @return int Seconds (at least 1: a zero timeout means "no limit" to curl).
+     */
+    private function effective_timeout(): int {
+        $left = $this->seconds_left();
+        if ($left === null) {
+            return $this->timeout;
+        }
+        return (int) max(1, min($this->timeout, ceil($left)));
+    }
+
+    /**
+     * Whether there is time to wait $delay seconds and still complete another attempt.
+     *
+     * @param int $delay Backoff the client would wait first.
+     * @return bool
+     */
+    private function has_time_to_retry(int $delay): bool {
+        $left = $this->seconds_left();
+        return $left === null || $left > ($delay + $this->effective_timeout());
+    }
+
+    /**
      * Whether the client has enough configuration to make requests.
      *
      * @return bool
@@ -213,9 +267,10 @@ class client {
     /**
      * What kind of failure the most recent error was, for advice the admin can act on.
      *
-     * The four kinds call for four different responses — widen the key's scope, update
-     * the plugin, wait for Credentium to recover, or open the firewall — so a report
-     * that only prints "HTTP 500" leaves an admin guessing which one applies.
+     * Each kind calls for a different response — widen the key's scope, update the
+     * plugin, lengthen the check interval, wait for Credentium to recover, or open the
+     * firewall — so a report that only prints "HTTP 500" leaves an admin guessing which
+     * one applies.
      *
      * @return string|null One of the FAIL_* constants, or null when nothing has failed.
      */
@@ -264,7 +319,18 @@ class client {
         $this->lastunanswered = [];
         $this->lastrequested = count($ids);
         $this->lastreturned = 0;
-        foreach (array_chunk($ids, self::BATCH_MAX) as $chunk) {
+        foreach (array_chunk($ids, self::BATCH_MAX) as $index => $chunk) {
+            if ($index > 0 && ($this->seconds_left() ?? 1.0) <= 0) {
+                // Out of time part-way through a multi-chunk batch. Reported rather
+                // than dropped, so the caller can say these are still pending instead
+                // of implying Credentium had nothing to say about them. The first
+                // chunk always runs: the caller decided there was time to start.
+                $this->lasterror = $this->lasterror
+                    ?? 'Ran out of time before finishing ' . self::PATH_STATUS;
+                $this->lastfailurekind = $this->lastfailurekind ?? self::FAIL_BUSY;
+                array_push($this->lastunanswered, ...$chunk);
+                continue;
+            }
             try {
                 $response = $this->request('POST', self::PATH_STATUS, [], ['issueRequestIds' => $chunk]);
             } catch (\moodle_exception $e) {
@@ -418,7 +484,10 @@ class client {
                 return $this->decode_success($responsebody, $httpcode, $path);
             }
 
-            if (!self::is_retryable($httpcode) || $attempt >= $this->maxattempts) {
+            $delay = self::retry_delay($attempt, $info);
+            if (!self::is_retryable($httpcode)
+                    || $attempt >= $this->maxattempts
+                    || !$this->has_time_to_retry($delay)) {
                 throw $this->record_failure($method, $path, $httpcode, $responsebody, $info, $attempt);
             }
 
@@ -427,7 +496,7 @@ class client {
                 'http_code' => $httpcode,
                 'attempt' => $attempt,
             ]);
-            $this->backoff_sleep(self::retry_delay($attempt, $info));
+            $this->backoff_sleep($delay);
         }
     }
 
@@ -682,7 +751,7 @@ class client {
         $curl->setopt([
             'CURLOPT_RETURNTRANSFER' => true,
             'CURLOPT_HTTPHEADER' => $headers,
-            'CURLOPT_TIMEOUT' => $this->timeout,
+            'CURLOPT_TIMEOUT' => $this->effective_timeout(),
         ]);
 
         if ($method === 'POST') {

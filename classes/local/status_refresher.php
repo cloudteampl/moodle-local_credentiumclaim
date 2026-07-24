@@ -151,6 +151,9 @@ class status_refresher {
                 break;
             }
             $client = $this->get_client($group['config'], (int) min(self::TIMEOUT, ceil($remaining)));
+            // Same structural bound the sync task relies on: the budget covers every
+            // chunk of the batch, not just the first call.
+            $client->set_deadline($deadline);
 
             $keys = [];
             foreach ($group['rows'] as $row) {

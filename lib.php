@@ -174,10 +174,10 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
 /**
  * Turn the last run's failure into advice the administrator can act on.
  *
- * The four failure kinds need four different responses — widen the API key's scope,
- * update the plugin, wait for Credentium to recover, or open outbound HTTPS — and a
- * report that only prints "HTTP 500 from POST /api/..." leaves an admin unable to tell
- * which one applies (or whether the site is even at fault). The raw string is still
+ * Each failure kind needs a different response — widen the API key's scope, update
+ * the plugin, lengthen the check interval, wait for Credentium to recover, or open
+ * outbound HTTPS — and a report that only prints "HTTP 500 from POST /api/..." leaves
+ * an admin unable to tell which one applies (or whether the site is even at fault). The raw string is still
  * shown alongside as the technical detail, because that is what support tickets need.
  *
  * @param string $kind A \local_credentiumclaim\api\client::FAIL_* value; anything
