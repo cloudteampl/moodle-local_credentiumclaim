@@ -68,9 +68,12 @@ class hook_callbacks {
      * Add a "My credentials (N)" entry to the user menu (the avatar dropdown).
      *
      * Unlike the banner this is not dismissible and does not depend on the "show
-     * banner" setting: it is the standing, always-there pointer so a learner can
-     * always find a credential waiting for them. Shown only when there is at least
-     * one to claim, to avoid a permanent "(0)" cluttering everyone's menu.
+     * banner" setting: it is the standing pointer so a learner can always find their
+     * credentials. It appears for anyone who has any credential to see, and carries a
+     * count only while something is actually waiting to be claimed — gating the entry
+     * itself on that count made it disappear the moment a learner claimed the last
+     * one, removing the only route back to what they had just collected. Learners who
+     * have never been issued anything still get no entry, so the menu stays clean.
      *
      * @param \core_user\hook\extend_user_menu $hook The user-menu hook.
      * @return void
@@ -91,16 +94,22 @@ class hook_callbacks {
             return;
         }
 
-        $count = claimable::count_claimable_for_user((int) $USER->id);
-        if ($count < 1) {
+        if (claimable::count_visible_for_user((int) $USER->id) < 1) {
             return;
         }
+
+        $waiting = claimable::count_claimable_for_user((int) $USER->id);
+        $title = $waiting > 0
+            ? get_string('nav_mycredentials_count', 'local_credentiumclaim', $waiting)
+            : get_string('nav_mycredentials', 'local_credentiumclaim');
 
         $hook->add_navitem((object) [
             'itemtype' => 'link',
             'url' => new \moodle_url('/local/credentiumclaim/mycredentials.php'),
-            'title' => get_string('nav_mycredentials_count', 'local_credentiumclaim', $count),
-            'titleidentifier' => 'nav_mycredentials_count,local_credentiumclaim',
+            'title' => $title,
+            'titleidentifier' => $waiting > 0
+                ? 'nav_mycredentials_count,local_credentiumclaim'
+                : 'nav_mycredentials,local_credentiumclaim',
         ]);
     }
 }

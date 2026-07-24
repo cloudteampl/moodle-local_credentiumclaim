@@ -93,6 +93,27 @@ class admin_settings_form extends \moodleform {
         $mform->addHelpButton('syncinterval', 'syncinterval', 'local_credentiumclaim');
         $mform->hideIf('syncinterval', 'enabled', 'notchecked');
 
+        // Wallet address. Normally learned from the API and left blank here; the field
+        // exists for sites where no claim link has ever been minted through Moodle, so
+        // there was nothing to learn from.
+        $mform->addElement('text', 'walleturl', get_string('walleturl', 'local_credentiumclaim'), ['size' => 50]);
+        $mform->setType('walleturl', PARAM_URL);
+        $mform->addHelpButton('walleturl', 'walleturl', 'local_credentiumclaim');
+        $mform->hideIf('walleturl', 'enabled', 'notchecked');
+        $learned = get_config('local_credentiumclaim', 'walletbaselearned');
+        if (!empty($learned)) {
+            $mform->addElement(
+                'static',
+                'walleturldetected',
+                '',
+                \html_writer::span(
+                    get_string('walleturl_detected', 'local_credentiumclaim', \html_writer::tag('code', s($learned))),
+                    'text-muted'
+                )
+            );
+            $mform->hideIf('walleturldetected', 'enabled', 'notchecked');
+        }
+
         // Show banner.
         $mform->addElement('advcheckbox', 'showbanner', get_string('showbanner', 'local_credentiumclaim'));
         $mform->addHelpButton('showbanner', 'showbanner', 'local_credentiumclaim');

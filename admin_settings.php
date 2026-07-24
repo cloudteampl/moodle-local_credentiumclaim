@@ -36,6 +36,8 @@ $config->enabled = get_config('local_credentiumclaim', 'enabled');
 // Same unset-means-on default the banner hook applies at render time.
 $config->showbanner = local_credentiumclaim_show_banner() ? 1 : 0;
 $config->debuglog = get_config('local_credentiumclaim', 'debuglog');
+// Only the manual override is editable; the learned value is shown beside it as a hint.
+$config->walleturl = (string) get_config('local_credentiumclaim', 'walleturl');
 // Null means the cron schedule was hand-edited; '' selects the "custom" option.
 $config->syncinterval = local_credentiumclaim_get_sync_interval() ?? '';
 $mform->set_data($config);
@@ -46,6 +48,8 @@ if ($mform->is_cancelled()) {
     set_config('enabled', !empty($data->enabled) ? 1 : 0, 'local_credentiumclaim');
     set_config('showbanner', !empty($data->showbanner) ? 1 : 0, 'local_credentiumclaim');
     set_config('debuglog', !empty($data->debuglog) ? 1 : 0, 'local_credentiumclaim');
+    // Stored without a trailing slash so it composes the same way as a learned value.
+    set_config('walleturl', rtrim(trim((string) ($data->walleturl ?? '')), '/'), 'local_credentiumclaim');
 
     // An empty interval means "leave the hand-edited cron schedule alone".
     if (!empty($data->syncinterval)) {

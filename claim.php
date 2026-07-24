@@ -73,6 +73,11 @@ if (!local_credentiumclaim_is_enabled()) {
                 case client::ACTION_CREATE:
                 case client::ACTION_LOGIN:
                     if (!empty($result->claimurl)) {
+                        // The claim URL points into the wallet, which is the only place
+                        // the wallet's address is ever disclosed. Keep the origin (never
+                        // the URL itself — that is a single-use secret) so this learner's
+                        // claimed credentials can be linked to afterwards.
+                        local_credentiumclaim_remember_wallet_base($result->claimurl);
                         // The user has acted on this credential: stop nagging via the banner.
                         claimable::dismiss($USER->id, (int) $row->id);
                         // The learner is about to claim in Credentium: flag the row so the

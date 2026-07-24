@@ -172,6 +172,97 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
 }
 
 /**
+ * Base address of the Credentium Wallet, used to link a claimed credential to it.
+ *
+ * The API never states this address outright — there is no endpoint for it — but it
+ * gives it away every time it mints a claim link, whose URL points into the wallet.
+ * So the plugin learns it (see {@see local_credentiumclaim_remember_wallet_base()})
+ * instead of asking an administrator to type in a value the system already knows.
+ * The manual setting exists only for the case learning cannot cover: a site whose
+ * learners have never claimed through Moodle, so no claim link has ever been seen.
+ *
+ * @return string|null Origin with no trailing slash, or null when it is not known yet.
+ */
+function local_credentiumclaim_wallet_base_url() {
+    $configured = trim((string) get_config('local_credentiumclaim', 'walleturl'));
+    if ($configured !== '') {
+        // Held to the same http(s) rule as a learned address. PARAM_URL on the
+        // settings field is broader than that (it would pass ftp:, mailto:), and this
+        // value ends up in an href on a learner's page, so the narrower rule is
+        // applied where the value is read rather than only where it is written.
+        return local_credentiumclaim_http_origin($configured) !== null ? rtrim($configured, '/') : null;
+    }
+    $learned = trim((string) get_config('local_credentiumclaim', 'walletbaselearned'));
+    return $learned !== '' ? $learned : null;
+}
+
+/**
+ * The http(s) origin of a URL: scheme, host and port, and nothing else.
+ *
+ * @param string $url Any URL.
+ * @return string|null Null unless it is an absolute http or https URL.
+ */
+function local_credentiumclaim_http_origin($url) {
+    $parts = parse_url((string) $url);
+    if (empty($parts['scheme']) || empty($parts['host'])) {
+        return null;
+    }
+    if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+        return null;
+    }
+    $origin = strtolower($parts['scheme']) . '://' . $parts['host'];
+    if (!empty($parts['port'])) {
+        $origin .= ':' . ((int) $parts['port']);
+    }
+    return $origin;
+}
+
+/**
+ * Learn the wallet's address from a freshly minted claim URL.
+ *
+ * Stores the origin only — scheme, host and port. The rest of a claim URL is a
+ * single-use, bearer-equivalent secret and must never be persisted; keeping just the
+ * origin is what makes remembering it safe at all.
+ *
+ * @param string $claimurl A claim URL returned by the API.
+ * @return void
+ */
+function local_credentiumclaim_remember_wallet_base($claimurl) {
+    $origin = local_credentiumclaim_http_origin($claimurl);
+    if ($origin === null) {
+        return;
+    }
+    $previous = (string) get_config('local_credentiumclaim', 'walletbaselearned');
+    if ($origin === $previous) {
+        return;
+    }
+    // This value is site-wide: it decides where every learner's "Open in wallet"
+    // button points. It is only ever taken from an address the API itself handed us,
+    // but a change is worth a trace so an unexpected one can be accounted for.
+    local_credentiumclaim_log('Wallet address learned', ['from' => $previous, 'to' => $origin]);
+    set_config('walletbaselearned', $origin, 'local_credentiumclaim');
+}
+
+/**
+ * Link to a claimed credential inside the Credentium Wallet.
+ *
+ * Mirrors the address the API itself builds for a "sign in and claim" link, minus
+ * the invitation code: the wallet enforces authentication on the credential page, so
+ * this carries no secret and can safely be rendered as an ordinary link.
+ *
+ * @param string|null $credentialid Credentium credentialId for the credential.
+ * @return \moodle_url|null Null when either the wallet address or the id is unknown.
+ */
+function local_credentiumclaim_wallet_credential_url($credentialid) {
+    $base = local_credentiumclaim_wallet_base_url();
+    $credentialid = trim((string) $credentialid);
+    if ($base === null || $credentialid === '') {
+        return null;
+    }
+    return new moodle_url($base . '/account/login', ['returnUrl' => '/credentials/' . $credentialid]);
+}
+
+/**
  * Turn the last run's failure into advice the administrator can act on.
  *
  * Each failure kind needs a different response — widen the API key's scope, update
@@ -236,6 +327,11 @@ function local_credentiumclaim_myprofile_navigation(\core_user\output\myprofile\
         return;
     }
 
+    // Same rule as the user-menu entry: present for anyone with credentials to see,
+    // counted only while something is still waiting to be claimed.
+    if (\local_credentiumclaim\local\claimable::count_visible_for_user((int) $user->id) < 1) {
+        return;
+    }
     $label = get_string('nav_mycredentials', 'local_credentiumclaim');
     // A persistent pointer like the user-menu entry, so it counts claimable credentials
     // regardless of whether the banner was dismissed.
