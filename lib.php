@@ -172,6 +172,53 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
 }
 
 /**
+ * Turn the last run's failure into advice the administrator can act on.
+ *
+ * Each failure kind needs a different response — widen the API key's scope, update
+ * the plugin, lengthen the check interval, wait for Credentium to recover, or open
+ * outbound HTTPS — and a report that only prints "HTTP 500 from POST /api/..." leaves
+ * an admin unable to tell which one applies (or whether the site is even at fault). The raw string is still
+ * shown alongside as the technical detail, because that is what support tickets need.
+ *
+ * @param string $kind A \local_credentiumclaim\api\client::FAIL_* value; anything
+ *                     unrecognised (including '') falls back to generic advice.
+ * @return string Translated advice, ready to render.
+ */
+function local_credentiumclaim_run_error_advice($kind) {
+    $known = [
+        \local_credentiumclaim\api\client::FAIL_AUTH => 'report_error_auth',
+        // FAIL_CLIENT also covers a client that was never configured, which cannot be
+        // reached today (connector_config rejects incomplete credentials before a client
+        // is built) but would land here with the same "the request was wrong" advice.
+        \local_credentiumclaim\api\client::FAIL_CLIENT => 'report_error_client',
+        \local_credentiumclaim\api\client::FAIL_BUSY => 'report_error_busy',
+        \local_credentiumclaim\api\client::FAIL_SERVER => 'report_error_server',
+        \local_credentiumclaim\api\client::FAIL_NETWORK => 'report_error_network',
+    ];
+    $stringid = $known[(string) $kind] ?? 'report_error_generic';
+    return get_string($stringid, 'local_credentiumclaim');
+}
+
+/**
+ * The full "what went wrong and what to do" message for the last recorded run.
+ *
+ * Shared by the report page and the manual "Check status now" redirect so both give
+ * the same diagnosis; a run that failed one way must never be explained two ways.
+ *
+ * @return string Translated message, ready to render.
+ */
+function local_credentiumclaim_run_error_message() {
+    $message = local_credentiumclaim_run_error_advice(
+        (string) get_config('local_credentiumclaim', 'lastrunerrorkind')
+    );
+    $pending = (int) get_config('local_credentiumclaim', 'lastrununanswered');
+    if ($pending > 0) {
+        $message .= ' ' . get_string('report_error_pending', 'local_credentiumclaim', $pending);
+    }
+    return $message;
+}
+
+/**
  * Add a "My credentials" node to the user's own profile page.
  *
  * @param \core_user\output\myprofile\tree $tree The profile tree.

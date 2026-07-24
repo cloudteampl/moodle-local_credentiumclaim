@@ -169,10 +169,24 @@ $unmatched = (int) get_config('local_credentiumclaim', 'lastrununmatched');
 if ($lastrunresult === sync_status::RESULT_ERROR) {
     // An API failure explains the missing statuses on its own; blaming the
     // identifiers here would send the admin looking in the wrong place.
-    echo $OUTPUT->notification($outcome, \core\output\notification::NOTIFY_ERROR);
+    // The table above already carries the raw failure, so this box carries the part
+    // an admin cannot derive from it: which of the five causes it was, and what to do.
+    echo $OUTPUT->notification(
+        local_credentiumclaim_run_error_message(),
+        \core\output\notification::NOTIFY_ERROR
+    );
 } else if ($unmatched > 0) {
     echo $OUTPUT->notification(
         get_string('report_unmatched', 'local_credentiumclaim', $unmatched),
+        \core\output\notification::NOTIFY_WARNING
+    );
+}
+$pending = (int) get_config('local_credentiumclaim', 'lastrununanswered');
+if ($lastrunresult !== sync_status::RESULT_ERROR && $pending > 0) {
+    // A run can leave credentials unchecked without failing — it can simply run out
+    // of its time budget. Saying so beats a clean "Completed" that quietly did less.
+    echo $OUTPUT->notification(
+        get_string('report_error_pending', 'local_credentiumclaim', $pending),
         \core\output\notification::NOTIFY_WARNING
     );
 }

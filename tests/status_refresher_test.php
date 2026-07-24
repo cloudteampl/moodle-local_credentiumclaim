@@ -159,6 +159,50 @@ final class status_refresher_test extends \advanced_testcase {
         $this->assertSame('processing', $this->row($user->id, 'key-1')->remotestatus);
     }
 
+    public function test_a_failing_api_is_not_retried_during_a_page_load(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        $this->make_stale($user->id, 'key-1');
+
+        $client = new class ('https://api.example.com', 'pub.key') extends \local_credentiumclaim\api\client {
+            /** @var int How many HTTP calls were attempted. */
+            public int $calls = 0;
+
+            /**
+             * Fail every call, counting the attempts.
+             *
+             * @param string $method HTTP method.
+             * @param string $url Request URL.
+             * @param string[] $headers Request headers.
+             * @param string|null $body Request body.
+             * @return array [http_code, response_body, curl_info]
+             */
+            protected function raw_request(string $method, string $url, array $headers, ?string $body): array {
+                $this->calls++;
+                return [500, '', []];
+            }
+
+            /**
+             * Fail the test loudly rather than stalling a simulated page load.
+             *
+             * @param int $seconds Seconds the client wanted to wait.
+             * @return void
+             */
+            protected function backoff_sleep(int $seconds): void {
+                throw new \coding_exception('The interactive refresher must never sleep between attempts.');
+            }
+        };
+
+        $refresher = new status_refresher();
+        $refresher->set_client($client);
+
+        // Cron rides out a transient fault; an interactive page must not spend a
+        // learner's render on an API that has already failed once.
+        $this->assertSame(0, $refresher->refresh_for_user((int) $user->id));
+        $this->assertSame(1, $client->calls);
+        $this->assertSame('processing', $this->row($user->id, 'key-1')->remotestatus);
+    }
+
     /**
      * Build a refresher whose client answers from a canned status map.
      *

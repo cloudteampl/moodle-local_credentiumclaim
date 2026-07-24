@@ -42,6 +42,8 @@ final class client_test extends \advanced_testcase {
             public array $requests = [];
             /** @var callable|null Optional responder taking method, url and body. */
             public $handler = null;
+            /** @var int[] Backoff waits the client asked for, in order. */
+            public array $waits = [];
 
             /**
              * Capture the request and return a canned or handler-provided response.
@@ -58,6 +60,16 @@ final class client_test extends \advanced_testcase {
                     return ($this->handler)($method, $url, $body);
                 }
                 return [200, json_encode(['results' => []]), []];
+            }
+
+            /**
+             * Record the wait instead of performing it, so retry tests stay instant.
+             *
+             * @param int $seconds Seconds the client wanted to wait.
+             * @return void
+             */
+            protected function backoff_sleep(int $seconds): void {
+                $this->waits[] = $seconds;
             }
         };
     }
@@ -267,6 +279,208 @@ final class client_test extends \advanced_testcase {
             $client->last_error_was_auth(),
             'The status must belong to the failing response, not to whatever came last.'
         );
+    }
+
+    public function test_a_transient_server_error_is_retried_and_then_succeeds(): void {
+        $client = $this->make_client();
+        $calls = 0;
+        $client->handler = function ($method, $url, $body) use (&$calls) {
+            $calls++;
+            if ($calls < 3) {
+                return [500, '', []];
+            }
+            $ids = json_decode($body)->issueRequestIds;
+            return [200, json_encode(['results' => [
+                ['issueRequestId' => $ids[0], 'status' => 'issued'],
+            ]]), []];
+        };
+
+        $map = $client->get_status_batch(['a']);
+
+        // A blip on the Credentium side used to discard the whole sync cycle: every
+        // tracked credential stayed stale until the next scheduled run.
+        $this->assertSame('issued', $map['a']->status);
+        $this->assertCount(3, $client->requests);
+        $this->assertSame([1, 2], $client->waits, 'Backoff must grow between attempts.');
+        $this->assertNull($client->get_last_error());
+    }
+
+    public function test_a_client_error_is_not_retried(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [404, json_encode(['error' => 'Not found']), []];
+
+        $client->get_status_batch(['a']);
+
+        // Repeating a deterministic refusal only multiplies load on the API.
+        $this->assertCount(1, $client->requests);
+        $this->assertSame([], $client->waits);
+    }
+
+    public function test_a_persistent_server_error_gives_up_and_says_how_hard_it_tried(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [500, '', []];
+
+        $client->get_status_batch(['a']);
+
+        $this->assertCount(3, $client->requests, 'Retrying must be bounded.');
+        $this->assertStringContainsString('after 3 attempts', $client->get_last_error());
+        $this->assertSame(\local_credentiumclaim\api\client::FAIL_SERVER, $client->get_last_failure_kind());
+    }
+
+    public function test_retrying_can_be_switched_off_for_interactive_callers(): void {
+        $client = $this->make_client();
+        $client->set_max_attempts(1);
+        $client->handler = fn($m, $u, $b) => [500, '', []];
+
+        $client->get_status_batch(['a']);
+
+        // A learner's page load must not be spent on an API that already failed once.
+        $this->assertCount(1, $client->requests);
+        $this->assertStringNotContainsString('attempts', (string) $client->get_last_error());
+    }
+
+    public function test_retry_after_header_is_honoured_over_the_backoff(): void {
+        $client = $this->make_client();
+        $calls = 0;
+        $client->handler = function ($method, $url, $body) use (&$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return [429, '', ['response_headers' => ['Retry-After' => '5']]];
+            }
+            return [200, json_encode(['results' => []]), []];
+        };
+
+        $client->get_status_batch(['a']);
+
+        $this->assertSame([5], $client->waits, 'A service that says when to come back must be obeyed.');
+    }
+
+    public function test_retry_after_is_capped_so_one_header_cannot_stall_cron(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [503, '', ['response_headers' => ['retry-after: 3600']]];
+
+        $client->get_status_batch(['a']);
+
+        $this->assertSame([8, 8], $client->waits, 'An hour-long Retry-After must not hold up the whole run.');
+    }
+
+    public function test_an_unreachable_api_is_not_reported_as_http_0(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [0, false, ['transport_error' => 'Could not resolve host: api.example.com']];
+
+        $client->get_status_batch(['a']);
+
+        // Reporting "HTTP 0 from POST /api/..." told an admin nothing about a DNS or
+        // proxy problem.
+        $error = (string) $client->get_last_error();
+        $this->assertStringNotContainsString('HTTP 0', $error);
+        $this->assertStringContainsString('Could not resolve host', $error);
+        $this->assertSame(\local_credentiumclaim\api\client::FAIL_NETWORK, $client->get_last_failure_kind());
+        $this->assertCount(3, $client->requests, 'A dropped connection is worth another try.');
+    }
+
+    /**
+     * Each failure kind calls for entirely different admin advice.
+     *
+     * @dataProvider failure_kind_provider
+     * @param int $httpcode Status the API answered with (0 = never answered).
+     * @param string $expected The FAIL_* constant it must be classified as.
+     */
+    public function test_failures_are_classified_for_actionable_advice(int $httpcode, string $expected): void {
+        $client = $this->make_client();
+        $client->set_max_attempts(1);
+        $client->handler = fn($m, $u, $b) => [$httpcode, '', []];
+
+        $client->get_status_batch(['a']);
+
+        $this->assertSame($expected, $client->get_last_failure_kind());
+    }
+
+    /**
+     * Status codes and the failure kind each must map onto.
+     *
+     * @return array[] Rows of [http code, expected FAIL_* constant].
+     */
+    public static function failure_kind_provider(): array {
+        return [
+            'unreachable' => [0, \local_credentiumclaim\api\client::FAIL_NETWORK],
+            'unauthorised' => [401, \local_credentiumclaim\api\client::FAIL_AUTH],
+            'forbidden' => [403, \local_credentiumclaim\api\client::FAIL_AUTH],
+            'not found' => [404, \local_credentiumclaim\api\client::FAIL_CLIENT],
+            'request timeout' => [408, \local_credentiumclaim\api\client::FAIL_BUSY],
+            'rate limited' => [429, \local_credentiumclaim\api\client::FAIL_BUSY],
+            'server error' => [500, \local_credentiumclaim\api\client::FAIL_SERVER],
+            'gateway timeout' => [504, \local_credentiumclaim\api\client::FAIL_SERVER],
+        ];
+    }
+
+    public function test_a_deadline_stops_the_retrying(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [500, '', []];
+        // Already expired: there is no room to wait and try again.
+        $client->set_deadline(microtime(true) - 1);
+
+        $client->get_status_batch(['a']);
+
+        $this->assertCount(1, $client->requests, 'A deadline must outrank the attempt count.');
+        $this->assertSame([], $client->waits);
+    }
+
+    public function test_a_deadline_stops_a_multi_chunk_batch_and_reports_the_remainder(): void {
+        $client = $this->make_client();
+        $client->handler = function ($method, $url, $body) use (&$client) {
+            // The first chunk consumes the whole budget.
+            $client->set_deadline(microtime(true) - 1);
+            $ids = json_decode($body)->issueRequestIds;
+            $results = array_map(fn($id) => ['issueRequestId' => $id, 'status' => 'issued'], $ids);
+            return [200, json_encode(['results' => $results]), []];
+        };
+        $client->set_deadline(microtime(true) + 60);
+
+        $ids = [];
+        for ($i = 0; $i < 501; $i++) {
+            $ids[] = 'id' . $i;
+        }
+        $map = $client->get_status_batch($ids);
+
+        // Retry ladders live inside the chunk loop, so a budget checked only by the
+        // caller before the whole batch would be blown by a second chunk.
+        $this->assertCount(1, $client->requests, 'The second chunk must not be started.');
+        $this->assertCount(500, $map, 'The first chunk still counts.');
+        $this->assertSame(['id500'], $client->get_last_unanswered_ids());
+        $this->assertNotNull($client->get_last_error());
+    }
+
+    public function test_no_answer_is_distinguished_from_an_unrecognised_identifier(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [500, '', []];
+
+        $client->get_status_batch(['a', 'b']);
+
+        // Both cases leave the ids missing from the map, but only one of them is a
+        // reason to go and check the API key.
+        $this->assertSame(['a', 'b'], $client->get_last_unanswered_ids());
+    }
+
+    public function test_an_answered_but_unrecognised_identifier_is_not_reported_as_unanswered(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [200, json_encode(['results' => []]), []];
+
+        $client->get_status_batch(['a']);
+
+        $this->assertSame([], $client->get_last_unanswered_ids());
+        $this->assertNull($client->get_last_error());
+    }
+
+    public function test_a_2xx_without_results_is_reported_rather_than_silently_dropped(): void {
+        $client = $this->make_client();
+        $client->handler = fn($m, $u, $b) => [200, json_encode(['unexpected' => true]), []];
+
+        $map = $client->get_status_batch(['a']);
+
+        $this->assertSame([], $map);
+        $this->assertNotNull($client->get_last_error(), 'A nonsense response must not look like a clean run.');
+        $this->assertSame(['a'], $client->get_last_unanswered_ids());
     }
 
     public function test_non_2xx_throws_apierror_without_leaking_secret(): void {

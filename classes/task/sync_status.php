@@ -40,6 +40,24 @@ class sync_status extends \core\task\scheduled_task {
     /** @var int Max rows discovered/polled per run (bounds cron time and third-party API load). */
     protected const MAX_PER_RUN = 1000;
 
+    /**
+     * @var int Wall-clock budget for the polling phase, in seconds.
+     *
+     * Row and batch limits bound how much work a run takes on, but not how long an
+     * unresponsive API can make that work last: in category mode the run costs one
+     * batch call per distinct key, each of those splits into chunks, and each chunk
+     * brings its own retry ladder. syncnow.php raises the PHP time limit to 300s for
+     * a manual run, so without a budget a wide-enough site could hit it mid-poll and
+     * die instead of redirecting with a diagnosis.
+     *
+     * The deadline is handed to the client, which refuses to start an attempt the
+     * remaining time cannot finish, so the overshoot is one rounding second rather
+     * than a figure that has to be re-derived whenever a retry constant changes.
+     * Whatever is left unpolled keeps its older timechecked and is therefore first
+     * in the queue on the next run.
+     */
+    protected const POLL_BUDGET = 150;
+
     /** @var string Run outcome: the sync completed (possibly with nothing to do). */
     public const RESULT_OK = 'ok';
     /** @var string Run outcome: the plugin is switched off. */
@@ -210,18 +228,50 @@ class sync_status extends \core\task\scheduled_task {
         $polled = 0;
         $updated = 0;
         $unmatched = 0;
+        $unanswered = 0;
         $notifiedtotal = 0;
         $notifyfailedtotal = 0;
         $error = null;
+        $errorkind = null;
+
+        // Once the service, the rate limit, or the route to it has demonstrably failed,
+        // retrying each remaining group repeats a wait we already know the outcome of.
+        // In category mode that is one full retry ladder per distinct API key. Auth and
+        // request failures are per-key, so they say nothing about the next key and do
+        // not degrade. This bounds the retrying; POLL_BUDGET bounds the run itself.
+        $degraded = false;
+        $deadline = microtime(true) + self::POLL_BUDGET;
 
         foreach ($groups as $group) {
+            if (microtime(true) >= $deadline) {
+                // Out of budget. These rows are deliberately left unstamped: their older
+                // timechecked puts them at the head of the next run's queue.
+                $unanswered += count($group['rows']);
+                continue;
+            }
+
             $client = $this->get_client($group['config']);
+            if ($degraded) {
+                $client->set_max_attempts(1);
+            }
+            // The client enforces the deadline per attempt and per batch chunk, so the
+            // bound holds however many chunks and retries a group turns out to need.
+            $client->set_deadline($deadline);
 
             $keys = [];
             foreach ($group['rows'] as $row) {
                 $keys[$row->credentialkey] = true;
             }
             $statuses = $client->get_status_batch(array_keys($keys));
+            $degraded = $degraded || in_array(
+                $client->get_last_failure_kind(),
+                [client::FAIL_SERVER, client::FAIL_NETWORK, client::FAIL_BUSY],
+                true
+            );
+            // Ids whose batch call failed outright. Without this split every row of a
+            // failed run was counted as "Credentium did not recognise this identifier",
+            // which sent admins to check their API key during a Credentium outage.
+            $noanswer = array_fill_keys($client->get_last_unanswered_ids(), true);
 
             $unreported = [];
             $notified = 0;
@@ -239,6 +289,9 @@ class sync_status extends \core\task\scheduled_task {
                         }
                     }
                     $updated++;
+                } else if (isset($noanswer[$row->credentialkey])) {
+                    $unanswered++;
+                    $unreported[] = (int) $row->id;
                 } else {
                     $unmatched++;
                     $unreported[] = (int) $row->id;
@@ -255,12 +308,22 @@ class sync_status extends \core\task\scheduled_task {
             // Stamp the ones the API stayed silent about so the poll queue keeps moving.
             claimable::mark_checked($unreported);
 
-            $error = $error ?? $client->get_last_error();
+            if ($error === null) {
+                // The kind must travel with the message it describes, or a later group's
+                // success would leave the report advising on the wrong kind of failure.
+                $error = $client->get_last_error();
+                $errorkind = $client->get_last_failure_kind();
+            }
         }
 
         mtrace('Polled ' . $polled . ' credential(s); updated ' . $updated . '.');
         if ($unmatched > 0) {
             mtrace('Credentium did not recognise ' . $unmatched . ' identifier(s).');
+        }
+        if ($unanswered > 0) {
+            // Covers both "the call failed" and "the run ran out of budget before
+            // reaching this group": from the credential's point of view, the same thing.
+            mtrace('Could not check ' . $unanswered . ' credential(s) this run; they stay pending.');
         }
         if ($unresolved > 0) {
             mtrace('Skipped ' . $unresolved . ' credential(s) with no usable API credentials.');
@@ -273,10 +336,12 @@ class sync_status extends \core\task\scheduled_task {
             'polled' => $polled,
             'updated' => $updated,
             'unmatched' => $unmatched,
+            'unanswered' => $unanswered,
             'unresolved' => $unresolved,
             'notified' => $notifiedtotal,
             'notifyfailed' => $notifyfailedtotal,
             'error' => $error,
+            'errorkind' => $errorkind,
         ]);
     }
 
@@ -299,8 +364,8 @@ class sync_status extends \core\task\scheduled_task {
      * Persist a machine-readable summary of this run for the admin report.
      *
      * @param string $result One of the RESULT_* constants.
-     * @param array $counters Optional counters: polled, updated, unmatched, unresolved,
-     *                        notified, notifyfailed, error.
+     * @param array $counters Optional counters: polled, updated, unmatched, unanswered,
+     *                        unresolved, notified, notifyfailed, error, errorkind.
      * @return void
      */
     protected function record_run(string $result, array $counters = []): void {
@@ -309,9 +374,11 @@ class sync_status extends \core\task\scheduled_task {
         set_config('lastrunpolled', (int) ($counters['polled'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunupdated', (int) ($counters['updated'] ?? 0), 'local_credentiumclaim');
         set_config('lastrununmatched', (int) ($counters['unmatched'] ?? 0), 'local_credentiumclaim');
+        set_config('lastrununanswered', (int) ($counters['unanswered'] ?? 0), 'local_credentiumclaim');
         set_config('lastrununresolved', (int) ($counters['unresolved'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunnotified', (int) ($counters['notified'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunnotifyfailed', (int) ($counters['notifyfailed'] ?? 0), 'local_credentiumclaim');
         set_config('lastrunerror', (string) ($counters['error'] ?? ''), 'local_credentiumclaim');
+        set_config('lastrunerrorkind', (string) ($counters['errorkind'] ?? ''), 'local_credentiumclaim');
     }
 }
