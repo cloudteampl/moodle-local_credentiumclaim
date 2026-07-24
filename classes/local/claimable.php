@@ -245,7 +245,9 @@ class claimable {
         $normalized = self::normalize_status($status);
 
         $factory = \core\lock\lock_config::get_lock_factory('local_credentiumclaim_status');
-        $lock = $factory->get_lock('row_' . (int) $row->id, 3);
+        // Held for milliseconds; the short max lifetime just stops a killed process
+        // from wedging this row for the default 24h on DB/Redis lock factories.
+        $lock = $factory->get_lock('row_' . (int) $row->id, 3, 60);
         if (!$lock) {
             // Another process is applying a status to this row right now; its
             // result is at least as fresh as ours, so leave the outcome to it.
