@@ -205,11 +205,14 @@ class status_refresher {
      * @return client
      */
     protected function get_client(\stdClass $config, int $timeout = self::TIMEOUT): client {
-        if ($this->client !== null) {
-            return $this->client;
-        }
-        $client = new client($config->apiurl, $config->apikey);
+        $client = $this->client ?? new client($config->apiurl, $config->apikey);
         $client->set_timeout($timeout);
+        // No retrying on this path. The scheduled task is where a transient API fault is
+        // ridden out; spending a learner's page load on a second attempt would only turn
+        // one slow render into a slower one, and the page falls back to the last known
+        // statuses perfectly well. Applied to an injected client too, so the bound is
+        // part of what the tests exercise rather than an untested production-only branch.
+        $client->set_max_attempts(1);
         return $client;
     }
 }

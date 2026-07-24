@@ -97,8 +97,9 @@ switch ($result) {
         $type = \core\output\notification::NOTIFY_ERROR;
         break;
     default:
-        $error = (string) get_config('local_credentiumclaim', 'lastrunerror');
-        $message = get_string('report_result_error', 'local_credentiumclaim', s($error));
+        // The raw failure is on the report page the admin is being sent back to; the
+        // toast carries the diagnosis instead, which is the part that says what to do.
+        $message = local_credentiumclaim_run_error_message();
         $type = \core\output\notification::NOTIFY_ERROR;
 }
 

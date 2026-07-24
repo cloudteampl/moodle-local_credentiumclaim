@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-24
+
+### Fixed
+- **A transient Credentium API fault no longer discards a whole sync cycle.**
+  A single `HTTP 500` from `POST /api/credential-issue-requests/statuses` — a
+  server-side fault the plugin cannot provoke; the endpoint answers `400` to a
+  malformed body, `401` to a key without `credentials:read`, and silently omits
+  identifiers belonging to another organisation — took down the entire run.
+  Every tracked credential then stayed stale until the next scheduled check, so
+  a learner whose credential became claimable during the blip waited out the
+  full interval. Requests that fail transiently (a dropped connection, a read
+  timeout, `408`, `429`, or any `5xx`) are now retried up to three times with an
+  exponential backoff, honouring `Retry-After` when the service sends one and
+  capping any single wait at 8 seconds. Deterministic refusals (`4xx`) are never
+  retried — repeating them would only add load and delay the real answer.
+- **An API outage is no longer reported as "Credentium did not recognise these
+  identifiers".** A failed batch call and an identifier Credentium genuinely
+  does not know both leave the status missing, and the report counted them the
+  same way — sending administrators to re-check an API key that was never the
+  problem. The two are now counted separately, and credentials left unchecked by
+  a failure are reported as pending rather than as unrecognised.
+- **An unreachable API is no longer reported as "HTTP 0".** When the request
+  never completes (DNS, TLS, proxy, a blocked host, or a timeout) there is no
+  status to quote, so the report now shows what cURL actually objected to.
+- **A `2xx` response without a `results` array is no longer silently dropped.**
+  It is treated exactly like a failed call, instead of looking like a clean run
+  that found nothing — the failure mode that used to leave credentials
+  apparently stuck with no reason shown anywhere.
+
+### Changed
+- **The report now says what kind of failure it was, and what to do about it.**
+  Failures are classified as authentication, request, service or network
+  problems, and the report's error box carries advice specific to that kind:
+  widen the API key's scope, look for a plugin update, wait for Credentium to
+  recover, or open outbound HTTPS. The raw technical detail stays in the
+  diagnostics table, because that is what a support ticket needs. The manual
+  "Check status now" button gives the same diagnosis.
+- **The page-load refresher never retries.** Riding out a transient fault is the
+  scheduled task's job; spending a learner's page render on a second attempt to
+  an API that has already failed once would only make a slow page slower. The
+  page falls back to the last known statuses, exactly as before.
+
 ## [1.3.1] - 2026-07-24
 
 ### Changed

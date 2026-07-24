@@ -132,7 +132,32 @@ waiting for cron.
 
 If Credentium® does not recognise some tracked identifiers, the report says so
 explicitly — that is the signature of an API key belonging to a different
-organisation than the one that issued the credentials.
+organisation than the one that issued the credentials. Credentials the API simply
+failed to answer for are counted separately and reported as still pending, so a
+service outage is never mistaken for that.
+
+When a run fails, the report classifies the failure and gives advice specific to
+it, because the four kinds need four different responses:
+
+| Kind | What it means | What to do |
+|---|---|---|
+| Authentication | The key was refused (`401`/`403`) | Check the connector's key and its `credentials:read` scope |
+| Request | Credentium® rejected the request (other `4xx`) | Look for a plugin update; quote the technical detail to support |
+| Service | Credentium® failed to complete it (`5xx`) | Nothing — the plugin retries and catches up by itself; escalate only if it persists |
+| Network | The API was never reached | Check outbound HTTPS, proxy, firewall and DNS |
+
+The raw failure (status, endpoint and how many attempts were made) stays in the
+diagnostics table, because that is what a support ticket needs.
+
+### Resilience
+
+Transient failures — a dropped connection, a read timeout, `408`, `429` or any
+`5xx` — are retried up to three times with an exponential backoff, honouring
+`Retry-After` when the service sends one and capping any single wait at eight
+seconds. Deterministic refusals (`4xx`) are never retried. Retrying belongs to
+the scheduled task only: the page-load refresh a learner triggers makes exactly
+one attempt and otherwise falls back to the last known statuses, so a struggling
+API can never slow down a page render more than once.
 
 > **Note on the API surface.** Status checks and claim links use the Credentium®
 > **v2** endpoints (`/api/credential-issue-requests/statuses` and
