@@ -108,6 +108,23 @@ final class claimable_test extends \advanced_testcase {
         $this->assertFalse(claimable::apply_remote_status($this->row($user->id, 'key-1'), 'claimed'));
     }
 
+    public function test_apply_remote_status_ignores_a_stale_caller_snapshot(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+
+        // Two concurrent pollers (cron and the page-load refresher) both read the row
+        // while it still said "processing", then both learn "issued" from the API.
+        // The transition must be decided against the database, not the caller's
+        // snapshot, or the learner would be notified twice.
+        $stalesnapshot = $this->row($user->id, 'key-1');
+
+        $this->assertTrue(claimable::apply_remote_status($stalesnapshot, 'issued'));
+        $this->assertFalse(
+            claimable::apply_remote_status($stalesnapshot, 'issued'),
+            'The second writer, still holding the processing snapshot, must not re-signal.'
+        );
+    }
+
     public function test_pollable_excludes_terminal_statuses(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'k-proc', null, null);

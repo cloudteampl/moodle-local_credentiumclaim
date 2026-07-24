@@ -110,6 +110,33 @@ final class status_refresher_test extends \advanced_testcase {
         );
     }
 
+    public function test_rows_with_no_usable_credentials_are_stamped_not_looped(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-orphan', null, null);
+        $this->make_stale($user->id, 'key-orphan');
+
+        // No injected client and no connector configuration: resolve_config() yields
+        // null, mirroring a category-mode course with no applicable API credentials.
+        $refresher = new class extends status_refresher {
+            /**
+             * Simulate a row whose course has no applicable API credentials.
+             *
+             * @param \stdClass $row Tracking row.
+             * @return \stdClass|null Always null.
+             */
+            protected function resolve_config(\stdClass $row): ?\stdClass {
+                return null;
+            }
+        };
+
+        $this->assertSame(0, $refresher->refresh_for_user((int) $user->id));
+        $this->assertGreaterThan(
+            0,
+            (int) $this->row($user->id, 'key-orphan')->timechecked,
+            'An unresolvable row must be stamped, or it hogs the refresh window forever.'
+        );
+    }
+
     public function test_an_exploding_client_never_breaks_the_page(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'key-1', null, null);

@@ -48,8 +48,11 @@ class status_refresher {
     /** @var int Upper bound of rows refreshed in one call. */
     protected const MAX_ROWS = 50;
 
-    /** @var int HTTP timeout in seconds; an interactive page must not wait longer. */
+    /** @var int HTTP timeout in seconds per API call; an interactive page must not wait longer. */
     protected const TIMEOUT = 8;
+
+    /** @var int Overall time budget in seconds for one refresh, across all API calls. */
+    protected const TIME_BUDGET = 10;
 
     /** @var client|null Injected client (for tests). */
     protected $client = null;
@@ -118,9 +121,13 @@ class status_refresher {
         // Group rows by the API credentials that apply to them, so a connector in
         // category mode is asked with the right key per course (same as the sync task).
         $groups = [];
+        $unresolvedids = [];
         foreach ($rows as $row) {
             $config = $this->resolve_config($row);
             if ($config === null) {
+                // No usable credentials for this row (same as the sync task): stamp it,
+                // or it would stay maximally stale and hog the MAX_ROWS window forever.
+                $unresolvedids[] = (int) $row->id;
                 continue;
             }
             $groupkey = sha1($config->apiurl . "\0" . $config->apikey);
@@ -129,10 +136,21 @@ class status_refresher {
             }
             $groups[$groupkey]['rows'][] = $row;
         }
+        claimable::mark_checked($unresolvedids);
+
+        // One overall deadline across all groups: in category mode each distinct key
+        // is a separate HTTP call, and a learner's page must not stack N slow calls.
+        $deadline = microtime(true) + self::TIME_BUDGET;
 
         $applied = 0;
         foreach ($groups as $group) {
-            $client = $this->get_client($group['config']);
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+                // Budget exhausted: the remaining rows keep their last known status
+                // and stay stale, so the next page view simply picks them up first.
+                break;
+            }
+            $client = $this->get_client($group['config'], (int) min(self::TIMEOUT, ceil($remaining)));
 
             $keys = [];
             foreach ($group['rows'] as $row) {
@@ -146,8 +164,9 @@ class status_refresher {
                     $becameready = claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
                     if ($becameready) {
                         // Same exactly-once semantics as cron: apply_remote_status()
-                        // reports the fresh transition into "issued" here, so the later
-                        // cron poll sees no change and will not notify again.
+                        // decides the transition under a per-row lock against the
+                        // database, so even a concurrent cron poll cannot observe the
+                        // same "became issued" moment and notify a second time.
                         notifier::credential_ready($row);
                     }
                     $applied++;
@@ -182,14 +201,15 @@ class status_refresher {
      * Resolve the API client for one set of credentials, honouring test injection.
      *
      * @param \stdClass $config Credentials {apiurl, apikey}.
+     * @param int $timeout HTTP timeout in seconds for this client.
      * @return client
      */
-    protected function get_client(\stdClass $config): client {
+    protected function get_client(\stdClass $config, int $timeout = self::TIMEOUT): client {
         if ($this->client !== null) {
             return $this->client;
         }
         $client = new client($config->apiurl, $config->apikey);
-        $client->set_timeout(self::TIMEOUT);
+        $client->set_timeout($timeout);
         return $client;
     }
 }
