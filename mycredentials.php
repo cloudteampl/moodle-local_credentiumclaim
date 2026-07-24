@@ -45,9 +45,23 @@ $PAGE->set_title(get_string('mycredentials', 'local_credentiumclaim'));
 $PAGE->set_heading(get_string('mycredentials_heading', 'local_credentiumclaim'));
 $PAGE->navbar->add(get_string('mycredentials', 'local_credentiumclaim'));
 
+$enabled = local_credentiumclaim_is_enabled();
+
+if ($enabled) {
+    // Bring stale statuses up to date before rendering, so a credential the learner
+    // claimed in Credentium moments ago does not still offer a "Claim" button here.
+    // Bounded, throttled and silent on failure — see status_refresher.
+    //
+    // Before the header, not after: the header draws the user menu and the banner,
+    // both of which count this learner's claimable credentials. Refreshing afterwards
+    // left them a request behind — the menu said "My credentials" with no count while
+    // the table below it already showed a credential as ready to claim.
+    (new status_refresher())->refresh_for_user((int) $USER->id);
+}
+
 echo $OUTPUT->header();
 
-if (!local_credentiumclaim_is_enabled()) {
+if (!$enabled) {
     echo $OUTPUT->notification(
         get_string('error:notconfigured', 'local_credentiumclaim'),
         \core\output\notification::NOTIFY_INFO
@@ -55,11 +69,6 @@ if (!local_credentiumclaim_is_enabled()) {
     echo $OUTPUT->footer();
     die();
 }
-
-// Bring stale statuses up to date before rendering, so a credential the learner
-// claimed in Credentium moments ago does not still offer a "Claim" button here.
-// Bounded, throttled and silent on failure — see status_refresher.
-(new status_refresher())->refresh_for_user((int) $USER->id);
 
 $rows = claimable::list_for_user($USER->id);
 
@@ -107,10 +116,12 @@ if (empty($rows)) {
             $action .= html_writer::end_tag('form');
         } else if ($row->remotestatus === claimable::STATUS_CLAIMED) {
             // A claimed credential lives in the wallet, so the useful action is to go
-            // and look at it. The link needs the credential's id and the wallet's
-            // address; without either, the row still says "Claimed" rather than
-            // offering a button that would land the learner nowhere.
-            $walleturl = local_credentiumclaim_wallet_credential_url($row->credentialid ?? null);
+            // and look at it. The link goes to the wallet's credential list, not to
+            // this one credential: see local_credentiumclaim_wallet_url() for why a
+            // deep link is not something this plugin can build. Without the wallet's
+            // address the row still says "Claimed" rather than offering a button that
+            // would land the learner nowhere.
+            $walleturl = local_credentiumclaim_wallet_url();
             $action = ($walleturl === null)
                 ? html_writer::span($statuslabel, 'text-muted')
                 : html_writer::link(

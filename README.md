@@ -95,7 +95,7 @@ Site administration → Plugins → Local plugins → **Credentium® Claim**:
 | API connection | **Read-only.** Endpoint and key inherited from the Credentium® Integration plugin. |
 | Status check interval | How often the sync task runs (5 min – 4 h). Rewrites the task's cron schedule. |
 | Show reminder banner | Whether to show the top-of-page banner. |
-| Credentium® Wallet address | Where a claimed credential opens. Normally left empty — see below. |
+| Credentium® Wallet address | Base address of the wallet, where claimed credentials link to. Normally left empty — see below. |
 | Enable debug logging | Writes secret-free diagnostics to the server log. |
 
 There is deliberately **no API URL or API key field here.** Both are inherited
@@ -129,10 +129,15 @@ Credentium® email), so there was nothing to learn from. An explicit setting alw
 wins over the learned value, which is also how you correct a stale one after the
 wallet moves.
 
-The link itself is `{wallet}/account/login?returnUrl=/credentials/{credentialId}` —
-the same address the API builds for its own "sign in and claim" links, minus the
-invitation code. The wallet enforces authentication on the credential page, so the
-link carries no secret.
+The link goes to the learner's **credential list** in the wallet
+(`{wallet}/my-credentials`), not to the one credential. A deep link would need the
+wallet's own id for it, and the wallet is a separate system with separate keys: it
+mints that id when the credential is delivered, and no endpoint of the issuer API
+discloses it. The identifier the API does return (`credentialId`) belongs to the
+issuer's database — feeding it to the wallet's `/credentials/{id}` lands on the
+*public* page for a credential that is not public, i.e. "Unavailable". The wallet
+requires sign-in for the list and returns the learner to it afterwards, so the link
+carries no secret and always resolves.
 
 ### Required API key scopes
 

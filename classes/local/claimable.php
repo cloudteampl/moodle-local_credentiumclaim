@@ -389,6 +389,10 @@ class claimable {
     /**
      * Store the Credentium credentialId a poll reported, if it is news.
      *
+     * Kept for traceability: it names the credential itself rather than the request
+     * that produced it, which is what Credentium support asks for. It is deliberately
+     * not what the wallet link is built from — see local_credentiumclaim_wallet_url().
+     *
      * Deliberately outside {@see self::write_status()}: the status write is a
      * carefully guarded, monotonic statement and this value needs none of that.
      * A credentialId is assigned once by Credentium and never changes, so a plain
@@ -410,7 +414,7 @@ class claimable {
         if (\core_text::strlen($credentialid) > self::CREDENTIALID_MAX) {
             // Longer than the column: storing it would throw and abort the whole poll
             // for a value that cannot be a Credentium identifier anyway. Truncating
-            // would be worse still — it would build a wallet link to nowhere.
+            // would keep a value that no longer identifies anything.
             require_once(__DIR__ . '/../../lib.php');
             local_credentiumclaim_log('Ignoring an oversized credentialId', ['rowid' => (int) $row->id]);
             return;

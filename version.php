@@ -25,10 +25,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_credentiumclaim';
-$plugin->version = 2026072403;
+$plugin->version = 2026072404;
 $plugin->requires = 2024100700; // Moodle 4.5.0 (the banner + user-menu hooks need the 4.4+ Hooks API).
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.5.0';
+$plugin->release = '1.5.1';
 $plugin->supported = [405, 500]; // Moodle 4.5 to 5.0.
 $plugin->dependencies = [
     'local_credentium' => ANY_VERSION,

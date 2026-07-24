@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-07-24
+
+### Fixed
+- **"Open in wallet" led to an "Unavailable" page.** The link was built as
+  `{wallet}/account/login?returnUrl=/credentials/{credentialId}`, copied from the
+  shape the issuer uses for its own claim links. That address is wrong twice over:
+  the wallet's `/credentials/{id}` is its **public** credential page, which is
+  served only when the holder has explicitly made that credential public, and the
+  id it expects is the wallet's own — not the issuer's `credentialId`, which is
+  what the status endpoint returns. The wallet and the issuer are separate systems
+  with separate keys: the wallet mints its id when a credential is delivered, and
+  no endpoint of the issuer API discloses it, so a deep link to one credential is
+  not something this plugin can build. Claimed credentials now link to the
+  learner's credential list in the wallet (`{wallet}/my-credentials`), which
+  requires sign-in, returns the learner to it afterwards, and always resolves.
+  (The same wrong address appears in the issuer's own `login_and_claim` links —
+  worth reporting to Credentium separately.)
+- **The user-menu count disappeared while the page showed a claimable
+  credential.** "My credentials" refreshed statuses *after* rendering the header,
+  but the header is what draws the user menu and the banner — both of which count
+  claimable credentials. So the menu rendered from the pre-refresh state and read
+  "My credentials" with no count, while the table below it already showed the
+  credential as *Ready to claim*. The refresh now runs before the header.
+
+### Changed
+- The `credentialid` column is kept, but for traceability rather than for building
+  a link: it names the credential itself rather than the request that produced it,
+  which is what a Credentium® support query needs.
+
 ## [1.5.0] - 2026-07-24
 
 ### Fixed
