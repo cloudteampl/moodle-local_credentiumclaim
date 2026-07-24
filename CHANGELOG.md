@@ -28,11 +28,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   all-writes lock), every status write now refuses to regress a more-advanced
   stored state (processing/unknown < issued < claimed/failed) via a guarded
   single-statement UPDATE, and the notify decision only fires when the fresh
-  read shows a pre-issued state. A late "issued" answer landing after a
-  concurrent writer stored "claimed" can no longer resurrect the credential on
-  the "My credentials" page or emit a "ready to claim" notification for
-  something already claimed. Poll bookkeeping (`timechecked`) is stamped even
-  for refused writes, so the poll queue keeps moving. Both interleavings are
+  read shows a pre-issued state and a post-write verification confirms the
+  "issued" actually stuck. A late "issued" answer landing after a concurrent
+  writer stored "claimed" can no longer resurrect the credential on the
+  "My credentials" page or emit a "ready to claim" notification for something
+  already claimed. Poll bookkeeping (`timechecked`) is stamped even for refused
+  writes, so the poll queue keeps moving. Both interleavings are
   regression-tested with stale-snapshot replays.
 
 ## [1.3.0] - 2026-07-24

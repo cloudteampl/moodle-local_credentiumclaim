@@ -297,10 +297,17 @@ class claimable {
                 return false;
             }
             self::write_status($row, $normalized, $current !== $normalized);
-            // Only an upward transition from a pre-issued state is a claim-me
-            // moment: a fresh read of "issued" means a concurrent writer beat us to
-            // it, and "claimed"/"failed" mean the moment has already passed.
-            return in_array($current, [self::STATUS_PROCESSING, self::STATUS_UNKNOWN], true);
+            if (!in_array($current, [self::STATUS_PROCESSING, self::STATUS_UNKNOWN], true)) {
+                // Not an upward transition from a pre-issued state: a fresh read of
+                // "issued" means a concurrent writer beat us to the moment, and
+                // "claimed"/"failed" mean the moment has already passed.
+                return false;
+            }
+            // One residual window remains: a lock-free terminal write can land
+            // between the read above and our guarded write (which then keeps it).
+            // Confirm "issued" actually stuck before signalling the claim-me
+            // moment — one extra read, only ever on this once-per-credential path.
+            return $DB->get_field(self::TABLE, 'remotestatus', ['id' => $row->id]) === self::STATUS_ISSUED;
         } finally {
             $lock->release();
         }
