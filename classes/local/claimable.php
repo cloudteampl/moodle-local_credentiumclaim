@@ -229,11 +229,24 @@ class claimable {
      * Apply a freshly polled remote status to a tracking row.
      *
      * Two writers can race here: the cron sync and the page-load refresher both
-     * follow "read row, ask the API, apply". The transition decision is therefore
-     * made against the status re-read from the database under a per-row lock —
-     * never against the caller's (possibly stale) snapshot — so exactly one of
-     * two concurrent writers can ever observe the transition into "issued" and
-     * notify. The caller's $row only needs id and userid.
+     * follow "read row, ask the API, apply", so the transition into "issued" — the
+     * one outcome that triggers a notification — must be observed by exactly one
+     * of them. The cost of guaranteeing that is tiered, because cron applies up to
+     * 1000 statuses per run and locking every write would multiply its round-trips:
+     *
+     * 1. Incoming status is not "issued": no notification can possibly result, so
+     *    a single idempotent UPDATE suffices (no lock, no extra read).
+     * 2. Incoming "issued" and the caller's snapshot already says "issued": a
+     *    snapshot can only ever lag the database, so the transition provably
+     *    happened in the past and was some earlier writer's to signal. Plain UPDATE.
+     * 3. Otherwise — a candidate transition into "issued" — the decision is made
+     *    against a fresh read under a per-row lock, so exactly one of two
+     *    concurrent writers observes it. This fires roughly once per credential
+     *    lifetime, keeping steady-state cron traffic entirely lock-free.
+     *
+     * The caller's $row must include id and userid; remotestatus, when present, is
+     * only a fast-path hint — a stale or missing value costs an unnecessary lock,
+     * never a wrong decision.
      *
      * @param \stdClass $row Existing row (must include id and userid).
      * @param string $status Raw Credentium status.
@@ -243,7 +256,24 @@ class claimable {
     public static function apply_remote_status(\stdClass $row, string $status): bool {
         global $DB;
         $normalized = self::normalize_status($status);
+        $snapshot = $row->remotestatus ?? null;
 
+        if ($normalized !== self::STATUS_ISSUED) {
+            // Tier 1: never a claim-me moment, regardless of races. A missing
+            // snapshot purges defensively — an extra purge is harmless, a missed
+            // one would leave the banner count stale.
+            self::write_status($row, $normalized, $snapshot !== $normalized);
+            return false;
+        }
+
+        if ($snapshot === self::STATUS_ISSUED) {
+            // Tier 2: already issued when the caller read the row, so the
+            // transition (and its one notification) belongs to the past.
+            self::write_status($row, $normalized, false);
+            return false;
+        }
+
+        // Tier 3: candidate transition into "issued".
         $factory = \core\lock\lock_config::get_lock_factory('local_credentiumclaim_status');
         // Held for milliseconds; the short max lifetime just stops a killed process
         // from wedging this row for the default 24h on DB/Redis lock factories.
@@ -259,22 +289,34 @@ class claimable {
                 // The row vanished (e.g. the user was deleted mid-poll).
                 return false;
             }
-            $now = time();
-            $DB->update_record(self::TABLE, (object) [
-                'id' => $row->id,
-                'remotestatus' => $normalized,
-                'timechecked' => $now,
-                'timemodified' => $now,
-            ]);
-            $changed = ($current !== $normalized);
-            if ($changed) {
-                self::purge_cache((int) $row->userid);
-            }
-            // Only a genuine transition into "issued" is a claim-me moment; polling an
-            // already-issued row again (issued -> issued) must not re-notify.
-            return $changed && $normalized === self::STATUS_ISSUED;
+            self::write_status($row, $normalized, $current !== $normalized);
+            // Only a genuine transition into "issued" is a claim-me moment; a fresh
+            // read of "issued" means a concurrent writer beat us to it.
+            return $current !== self::STATUS_ISSUED;
         } finally {
             $lock->release();
+        }
+    }
+
+    /**
+     * Persist a polled status onto a row and optionally invalidate cached counts.
+     *
+     * @param \stdClass $row Tracking row (must include id and userid).
+     * @param string $normalized Normalised status to store.
+     * @param bool $purge Whether the user's cached counts must be invalidated.
+     * @return void
+     */
+    private static function write_status(\stdClass $row, string $normalized, bool $purge): void {
+        global $DB;
+        $now = time();
+        $DB->update_record(self::TABLE, (object) [
+            'id' => $row->id,
+            'remotestatus' => $normalized,
+            'timechecked' => $now,
+            'timemodified' => $now,
+        ]);
+        if ($purge) {
+            self::purge_cache((int) $row->userid);
         }
     }
 

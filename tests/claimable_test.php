@@ -125,6 +125,48 @@ final class claimable_test extends \advanced_testcase {
         );
     }
 
+    public function test_a_minimal_snapshot_still_decides_the_transition_correctly(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        $full = $this->row($user->id, 'key-1');
+
+        // The documented contract: id and userid suffice; remotestatus is only a
+        // fast-path hint. Without it, every call must fall through to the locked
+        // fresh read — and still signal the transition exactly once.
+        $minimal = (object) ['id' => $full->id, 'userid' => $full->userid];
+
+        $this->assertTrue(claimable::apply_remote_status($minimal, 'issued'));
+        $this->assertSame(1, claimable::count_for_user($user->id), 'The locked path must still purge the cache.');
+        $this->assertFalse(
+            claimable::apply_remote_status($minimal, 'issued'),
+            'A hint-less snapshot may cost a lock, but never a duplicate signal.'
+        );
+    }
+
+    public function test_steady_state_repolls_stay_on_the_lockless_fast_path(): void {
+        global $DB;
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+
+        // The genuine transition takes the locked path (and warms metadata caches).
+        $this->assertTrue(claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued'));
+
+        // Cron's steady state: re-polling with a current snapshot. Neither the
+        // issued -> issued re-poll nor the terminal claimed write may read the
+        // database at all — that is what keeps 1000-row runs free of lock traffic.
+        // (Locks and MUC are file-backed under PHPUnit, so DB reads isolate the
+        // get_field of the locked path.)
+        $fresh = $this->row($user->id, 'key-1');
+        $reads = $DB->perf_get_reads();
+        $this->assertFalse(claimable::apply_remote_status($fresh, 'issued'));
+        $this->assertFalse(claimable::apply_remote_status($fresh, 'claimed'));
+        $this->assertSame(
+            0,
+            $DB->perf_get_reads() - $reads,
+            'Steady-state re-polls must write without reading: the lock-free fast path.'
+        );
+    }
+
     public function test_pollable_excludes_terminal_statuses(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'k-proc', null, null);
