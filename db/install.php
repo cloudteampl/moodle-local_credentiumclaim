@@ -15,21 +15,24 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version information for the local_credentiumclaim plugin.
+ * Post-install steps for the local_credentiumclaim plugin.
  *
  * @package    local_credentiumclaim
  * @copyright  2025 CloudTeam Sp. z o.o.
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-$plugin->component = 'local_credentiumclaim';
-$plugin->version = 2026072400;
-$plugin->requires = 2024100700; // Moodle 4.5.0 (the banner + user-menu hooks need the 4.4+ Hooks API).
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.3.0';
-$plugin->supported = [405, 500]; // Moodle 4.5 to 5.0.
-$plugin->dependencies = [
-    'local_credentium' => ANY_VERSION,
-];
+/**
+ * Persist setting defaults at install time.
+ *
+ * The settings live on a custom moodleform, so unlike admin_settings their
+ * defaults are never written automatically. Runtime code treats an unset
+ * `showbanner` as enabled anyway, but persisting the default keeps what the
+ * admin UI shows and what the site does trivially in sync.
+ *
+ * @return bool
+ */
+function xmldb_local_credentiumclaim_install() {
+    set_config('showbanner', 1, 'local_credentiumclaim');
+    return true;
+}

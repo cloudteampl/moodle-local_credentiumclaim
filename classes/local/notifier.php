@@ -67,6 +67,7 @@ class notifier {
             $body = ($coursename !== '')
                 ? get_string('message_ready_body_course', 'local_credentiumclaim', (object) ['course' => $coursename])
                 : get_string('message_ready_body', 'local_credentiumclaim');
+            $linktext = get_string('message_ready_linktext', 'local_credentiumclaim');
 
             $message = new \core\message\message();
             $message->component = 'local_credentiumclaim';
@@ -76,9 +77,13 @@ class notifier {
             $message->notification = 1;
             $message->courseid = !empty($row->courseid) ? (int) $row->courseid : SITEID;
             $message->subject = get_string('message_ready_subject', 'local_credentiumclaim');
-            $message->fullmessage = $body;
+            // A learner should be able to act straight from the message: the HTML body
+            // carries a real link (the popup renders HTML), and the plain-text body
+            // spells the URL out for text-only email clients.
+            $message->fullmessage = $body . "\n\n" . $linktext . ': ' . $url->out(false);
             $message->fullmessageformat = FORMAT_PLAIN;
-            $message->fullmessagehtml = \html_writer::tag('p', $body);
+            $message->fullmessagehtml = \html_writer::tag('p', $body)
+                . \html_writer::tag('p', \html_writer::link($url, $linktext));
             $message->smallmessage = get_string('message_ready_small', 'local_credentiumclaim');
             $message->contexturl = $url->out(false);
             $message->contexturlname = get_string('nav_mycredentials', 'local_credentiumclaim');

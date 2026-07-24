@@ -318,6 +318,27 @@ class claimable {
     }
 
     /**
+     * Ask for this row to be re-polled at the next opportunity.
+     *
+     * Zeroing `timechecked` makes the row look maximally stale, so the page-load
+     * refresher picks it up immediately instead of honouring its usual per-row
+     * throttle. Used right after a claim link is minted: the learner is about to
+     * claim, and the next look at "My credentials" should reflect that promptly.
+     *
+     * @param int $userid User id.
+     * @param int $rowid Row id.
+     * @return void
+     */
+    public static function request_recheck(int $userid, int $rowid): void {
+        global $DB;
+        $row = self::get_owned_row($userid, $rowid);
+        if ($row === null) {
+            return;
+        }
+        $DB->update_record(self::TABLE, (object) ['id' => $row->id, 'timechecked' => 0]);
+    }
+
+    /**
      * Mark a credential as claimed locally (e.g. Credentium reported already_claimed).
      *
      * @param int $userid User id.

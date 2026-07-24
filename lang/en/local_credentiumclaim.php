@@ -61,6 +61,7 @@ $string['error:notconfigured'] = 'Credentium® Claim is not configured. Check th
 $string['globalsettings'] = 'Credentium® Claim settings';
 $string['message_ready_body'] = 'Credentium® has issued you a digital credential that is ready to claim. Open "My credentials" to save it to your Credentium® Wallet.';
 $string['message_ready_body_course'] = 'Credentium® has issued you a digital credential for "{$a->course}" that is ready to claim. Open "My credentials" to save it to your Credentium® Wallet.';
+$string['message_ready_linktext'] = 'Go to My credentials';
 $string['message_ready_small'] = 'You have a Credentium® credential ready to claim.';
 $string['message_ready_subject'] = 'You have a credential to claim';
 $string['messageprovider:credentialready'] = 'A digital credential is ready to claim';

@@ -53,6 +53,21 @@ function local_credentiumclaim_is_enabled() {
 }
 
 /**
+ * Whether the reminder banner should be shown.
+ *
+ * An unset value counts as enabled: the setting lives on a custom moodleform, so
+ * unlike an admin_setting it is never persisted at install time. Sites that
+ * enabled the plugin without (re)saving that form would otherwise silently lose
+ * the banner — the plugin's most visible surface — with nothing to explain why.
+ *
+ * @return bool
+ */
+function local_credentiumclaim_show_banner() {
+    $value = get_config('local_credentiumclaim', 'showbanner');
+    return $value === false ? true : (bool) $value;
+}
+
+/**
  * The scheduled task that polls Credentium for claim statuses.
  *
  * @return \core\task\scheduled_task|null Null if the task is not registered (mid-install).

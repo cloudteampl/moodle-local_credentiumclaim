@@ -46,7 +46,7 @@ class client {
     /** @var int Maximum number of ids per batch status call. */
     private const BATCH_MAX = 500;
 
-    /** @var int HTTP timeout in seconds. */
+    /** @var int Default HTTP timeout in seconds. */
     private const TIMEOUT = 30;
 
     /** @var string[] Locales accepted by the claim-link endpoint. */
@@ -62,6 +62,9 @@ class client {
     public const ACTION_NOTREADY = 'not_ready';
     /** Claim action: unclassifiable. */
     public const ACTION_UNKNOWN = 'unknown';
+
+    /** @var int HTTP timeout in seconds for this instance. */
+    private $timeout = self::TIMEOUT;
 
     /** @var string|null Base API URL. */
     private $apiurl;
@@ -114,6 +117,20 @@ class client {
     public static function for_course(?int $courseid = null): self {
         $config = connector_config::for_course($courseid);
         return new self($config->apiurl ?? null, $config->apikey ?? null);
+    }
+
+    /**
+     * Override the HTTP timeout for this instance.
+     *
+     * Interactive callers (a page-load refresh) need a much tighter bound than the
+     * default used by cron: a learner's page must not hang for 30 seconds because
+     * the Credentium API is slow to answer.
+     *
+     * @param int $seconds Timeout in seconds (minimum 1).
+     * @return void
+     */
+    public function set_timeout(int $seconds): void {
+        $this->timeout = max(1, $seconds);
     }
 
     /**
@@ -381,7 +398,7 @@ class client {
         $curl->setopt([
             'CURLOPT_RETURNTRANSFER' => true,
             'CURLOPT_HTTPHEADER' => $headers,
-            'CURLOPT_TIMEOUT' => self::TIMEOUT,
+            'CURLOPT_TIMEOUT' => $this->timeout,
         ]);
 
         if ($method === 'POST') {

@@ -47,7 +47,7 @@ class hook_callbacks {
         }
 
         require_once($CFG->dirroot . '/local/credentiumclaim/lib.php');
-        if (!local_credentiumclaim_is_enabled() || !get_config('local_credentiumclaim', 'showbanner')) {
+        if (!local_credentiumclaim_is_enabled() || !local_credentiumclaim_show_banner()) {
             return;
         }
 

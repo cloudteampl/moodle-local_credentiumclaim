@@ -73,6 +73,62 @@ final class notify_test extends \advanced_testcase {
         $this->assertStringContainsString('Astrophysics 101', $messages[0]->fullmessage);
     }
 
+    public function test_notification_body_links_to_my_credentials(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        $row = $this->row($user->id, 'key-1');
+
+        $sink = $this->redirectMessages();
+        $this->assertTrue(notifier::credential_ready($row));
+
+        $messages = $sink->get_messages();
+        $this->assertCount(1, $messages);
+        // The learner must be able to act straight from the message: a real link in
+        // the HTML body, and a spelled-out URL in the plain-text fallback.
+        $this->assertStringContainsString('mycredentials.php', $messages[0]->fullmessagehtml);
+        $this->assertStringContainsString('<a ', $messages[0]->fullmessagehtml);
+        $this->assertStringContainsString('mycredentials.php', $messages[0]->fullmessage);
+    }
+
+    public function test_banner_shows_even_when_the_setting_was_never_saved(): void {
+        // No set_config('showbanner', ...): the site enabled the plugin but never
+        // (re)saved the settings form, which is exactly the state that used to
+        // silently disable the banner.
+        $this->assertStringContainsString(
+            'local-credentiumclaim-banner',
+            $this->render_banner_hook(),
+            'An unset showbanner must count as enabled.'
+        );
+    }
+
+    public function test_banner_respects_an_explicit_off_switch(): void {
+        set_config('showbanner', 0, 'local_credentiumclaim');
+        $this->assertSame('', $this->render_banner_hook());
+    }
+
+    /**
+     * Run the top-of-body banner hook for a user holding one claimable credential.
+     *
+     * @return string The HTML the hook injected (empty when suppressed).
+     */
+    private function render_banner_hook(): string {
+        global $OUTPUT, $PAGE;
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+        claimable::record_candidate($user->id, 'key-banner', null, null);
+        claimable::apply_remote_status($this->row($user->id, 'key-banner'), 'issued');
+
+        // The hook fires mid-header when $OUTPUT is a real renderer; mirror that
+        // (the early-bootstrap $OUTPUT is not one). Restored by resetAfterTest().
+        $PAGE->set_url('/');
+        $OUTPUT = $PAGE->get_renderer('core');
+
+        $hook = new \core\hook\output\before_standard_top_of_body_html_generation($OUTPUT);
+        hook_callbacks::before_standard_top_of_body_html($hook);
+        return $hook->get_output();
+    }
+
     public function test_no_notification_for_a_suspended_user(): void {
         $user = $this->getDataGenerator()->create_user(['suspended' => 1]);
         claimable::record_candidate($user->id, 'key-1', null, null);
