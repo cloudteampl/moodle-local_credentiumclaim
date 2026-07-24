@@ -485,9 +485,8 @@ class client {
             }
 
             $delay = self::retry_delay($attempt, $info);
-            if (!self::is_retryable($httpcode)
-                    || $attempt >= $this->maxattempts
-                    || !$this->has_time_to_retry($delay)) {
+            $exhausted = $attempt >= $this->maxattempts;
+            if (!self::is_retryable($httpcode) || $exhausted || !$this->has_time_to_retry($delay)) {
                 throw $this->record_failure($method, $path, $httpcode, $responsebody, $info, $attempt);
             }
 
@@ -660,8 +659,8 @@ class client {
         $value = null;
         foreach ($headers as $name => $raw) {
             if (is_array($raw)) {
-                // getResponse() collapses a repeated header into an array; the first
-                // value is the one curl saw first.
+                // A repeated header is collapsed into an array by getResponse(); the
+                // first value is the one curl saw first.
                 $raw = reset($raw);
             }
             if (!is_string($raw)) {
@@ -763,7 +762,7 @@ class client {
         $info = $curl->get_info();
         $httpcode = (int)($info['http_code'] ?? 0);
         if ($httpcode === 0 && is_string($curl->error) && $curl->error !== '') {
-            // curl gave up before any response arrived; its message is the only clue
+            // cURL gave up before any response arrived; its message is the only clue
             // an admin has about why (name resolution, TLS, proxy, timeout).
             $info['transport_error'] = (string) $curl->error;
         }

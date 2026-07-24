@@ -295,7 +295,7 @@ final class sync_status_test extends \advanced_testcase {
             429
         ));
 
-        // "Check for a plugin update" is useless advice for a rate limit; the admin
+        // Advice to "check for a plugin update" is useless for a rate limit; the admin
         // needs to hear that backing off is already happening.
         $this->assertSame(
             \local_credentiumclaim\api\client::FAIL_BUSY,

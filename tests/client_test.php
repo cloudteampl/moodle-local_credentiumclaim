@@ -370,7 +370,8 @@ final class client_test extends \advanced_testcase {
 
         $client->get_status_batch(['a']);
 
-        // "HTTP 0 from POST /api/..." told an admin nothing about a DNS or proxy problem.
+        // Reporting "HTTP 0 from POST /api/..." told an admin nothing about a DNS or
+        // proxy problem.
         $error = (string) $client->get_last_error();
         $this->assertStringNotContainsString('HTTP 0', $error);
         $this->assertStringContainsString('Could not resolve host', $error);
