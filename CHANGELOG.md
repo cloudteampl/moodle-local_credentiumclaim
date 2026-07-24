@@ -15,10 +15,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Every tracked credential then stayed stale until the next scheduled check, so
   a learner whose credential became claimable during the blip waited out the
   full interval. Requests that fail transiently (a dropped connection, a read
-  timeout, `408`, `429`, or any `5xx`) are now retried up to three times with an
-  exponential backoff, honouring `Retry-After` when the service sends one and
-  capping any single wait at 8 seconds. Deterministic refusals (`4xx`) are never
-  retried — repeating them would only add load and delay the real answer.
+  timeout, `408`, `429`, or any `5xx`) are now retried, for a total of three
+  attempts, with an exponential backoff — honouring `Retry-After` when the
+  service sends one and capping any single wait at 8 seconds. Deterministic
+  refusals (the other `4xx`) are never retried: repeating them would only add
+  load and delay the real answer. Once the service, the rate limit or the route
+  to it has failed, the remaining credential groups in the same run stop
+  retrying, and the whole polling phase now runs under a wall-clock budget — so
+  category mode with many API keys cannot stretch one run past the time limit a
+  manual "Check status now" is given.
 - **An API outage is no longer reported as "Credentium did not recognise these
   identifiers".** A failed batch call and an identifier Credentium genuinely
   does not know both leave the status missing, and the report counted them the
@@ -35,12 +40,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - **The report now says what kind of failure it was, and what to do about it.**
-  Failures are classified as authentication, request, service or network
-  problems, and the report's error box carries advice specific to that kind:
-  widen the API key's scope, look for a plugin update, wait for Credentium to
-  recover, or open outbound HTTPS. The raw technical detail stays in the
-  diagnostics table, because that is what a support ticket needs. The manual
-  "Check status now" button gives the same diagnosis.
+  Failures are classified as authentication, request, rate-limit, service or
+  network problems, and the report's error box carries advice specific to that
+  kind: widen the API key's scope, look for a plugin update, lengthen the check
+  interval, wait for Credentium to recover, or open outbound HTTPS. The raw
+  technical detail stays in the diagnostics table, because that is what a
+  support ticket needs. The manual "Check status now" button gives the same
+  diagnosis.
 - **The page-load refresher never retries.** Riding out a transient fault is the
   scheduled task's job; spending a learner's page render on a second attempt to
   an API that has already failed once would only make a slow page slower. The

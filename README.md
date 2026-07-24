@@ -137,12 +137,13 @@ failed to answer for are counted separately and reported as still pending, so a
 service outage is never mistaken for that.
 
 When a run fails, the report classifies the failure and gives advice specific to
-it, because the four kinds need four different responses:
+it, because the five kinds need five different responses:
 
 | Kind | What it means | What to do |
 |---|---|---|
 | Authentication | The key was refused (`401`/`403`) | Check the connector's key and its `credentials:read` scope |
 | Request | Credentium® rejected the request (other `4xx`) | Look for a plugin update; quote the technical detail to support |
+| Busy | Rate-limited, or timed out answering (`408`/`429`) | Usually nothing; if it is constant, lengthen the status check interval |
 | Service | Credentium® failed to complete it (`5xx`) | Nothing — the plugin retries and catches up by itself; escalate only if it persists |
 | Network | The API was never reached | Check outbound HTTPS, proxy, firewall and DNS |
 
@@ -152,12 +153,22 @@ diagnostics table, because that is what a support ticket needs.
 ### Resilience
 
 Transient failures — a dropped connection, a read timeout, `408`, `429` or any
-`5xx` — are retried up to three times with an exponential backoff, honouring
-`Retry-After` when the service sends one and capping any single wait at eight
-seconds. Deterministic refusals (`4xx`) are never retried. Retrying belongs to
-the scheduled task only: the page-load refresh a learner triggers makes exactly
-one attempt and otherwise falls back to the last known statuses, so a struggling
-API can never slow down a page render more than once.
+`5xx` — are retried, for a total of three attempts, backing off exponentially
+between them, honouring `Retry-After` when the service sends one and capping any
+single wait at eight seconds. Deterministic refusals (the other `4xx`) are never
+retried.
+
+Retrying is bounded twice over: once the service or the route to it has failed,
+the remaining credential groups in the same run stop retrying, and the polling
+phase as a whole runs under a wall-clock budget. A site running the connector in
+category mode — one API key per category, so one batch call per key — therefore
+cannot stretch a single run past the time limit a manual **Check status now** is
+given. Whatever the budget cuts short keeps its older `timechecked` and is first
+in the queue on the next run.
+
+Retrying belongs to the scheduled task only: the page-load refresh a learner
+triggers makes exactly one attempt and otherwise falls back to the last known
+statuses, so a struggling API can never slow down a page render more than once.
 
 > **Note on the API surface.** Status checks and claim links use the Credentium®
 > **v2** endpoints (`/api/credential-issue-requests/statuses` and

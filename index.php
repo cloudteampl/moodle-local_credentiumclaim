@@ -181,6 +181,15 @@ if ($lastrunresult === sync_status::RESULT_ERROR) {
         \core\output\notification::NOTIFY_WARNING
     );
 }
+$pending = (int) get_config('local_credentiumclaim', 'lastrununanswered');
+if ($lastrunresult !== sync_status::RESULT_ERROR && $pending > 0) {
+    // A run can leave credentials unchecked without failing — it can simply run out
+    // of its time budget. Saying so beats a clean "Completed" that quietly did less.
+    echo $OUTPUT->notification(
+        get_string('report_error_pending', 'local_credentiumclaim', $pending),
+        \core\output\notification::NOTIFY_WARNING
+    );
+}
 $unresolved = (int) get_config('local_credentiumclaim', 'lastrununresolved');
 if ($unresolved > 0) {
     echo $OUTPUT->notification(

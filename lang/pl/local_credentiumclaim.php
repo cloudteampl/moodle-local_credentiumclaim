@@ -90,6 +90,7 @@ $string['report_connection_ok'] = 'Odziedziczone z wtyczki Integracja Credentium
 $string['report_count'] = 'Liczba';
 $string['report_diagnostics'] = 'Diagnostyka';
 $string['report_error_auth'] = 'Credentium® odrzucił klucz API. We wtyczce Integracja Credentium® sprawdź, czy klucz jest nadal ważny i czy ma uprawnienie „credentials:read” — klucz, który może jedynie wystawiać poświadczenia, nie może odczytywać ich statusu.';
+$string['report_error_busy'] = 'Credentium® poprosił wtyczkę o zwolnienie tempa lub przekroczył czas odpowiedzi. Wtyczka sama odczekuje i ponawia próbę, więc zwykle nie trzeba nic robić. Jeśli dzieje się to przy każdym uruchomieniu, zwiększ odstęp sprawdzania statusu w ustawieniach wtyczki.';
 $string['report_error_client'] = 'Credentium® odrzucił samo żądanie. Zwykle oznacza to rozbieżność między wtyczką a API Credentium®: sprawdź, czy jest dostępna aktualizacja wtyczki, a kontaktując się ze wsparciem podaj szczegóły techniczne powyżej.';
 $string['report_error_generic'] = 'Ostatnie sprawdzenie statusu nie powiodło się. Kontaktując się ze wsparciem, podaj szczegóły techniczne powyżej.';
 $string['report_error_network'] = 'Nie udało się w ogóle połączyć z API Credentium®. Sprawdź, czy ten serwer może wykonywać wychodzące połączenia HTTPS pod skonfigurowany adres — najczęstszą przyczyną jest proxy, reguła zapory lub DNS.';

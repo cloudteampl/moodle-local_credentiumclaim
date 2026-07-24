@@ -62,6 +62,8 @@ class client {
     public const FAIL_AUTH = 'auth';
     /** Failure kind: Credentium understood the request and rejected it (4xx). */
     public const FAIL_CLIENT = 'client';
+    /** Failure kind: Credentium is rate-limiting the caller, or timed out answering (408/429). */
+    public const FAIL_BUSY = 'busy';
     /** Failure kind: Credentium accepted the request and failed to answer it (5xx). */
     public const FAIL_SERVER = 'server';
     /** Failure kind: the request never reached Credentium (DNS, TLS, connect/read timeout). */
@@ -371,7 +373,8 @@ class client {
      * Build and execute an API request, decode JSON, and map errors.
      *
      * Transient failures — a refused connection, a read timeout, 408/429, or any 5xx —
-     * are retried up to {@see self::$maxattempts} times with an exponential backoff.
+     * are retried until {@see self::$maxattempts} attempts have been made, backing off
+     * exponentially between them.
      * Without this a single blip on the Credentium side discarded a whole sync cycle:
      * every tracked credential stayed stale until the next scheduled run, and the
      * report blamed the identifiers. Deterministic refusals (4xx) are never retried;
@@ -538,6 +541,11 @@ class client {
             // The documented API only uses 401, but both mean "this key may not do that".
             return self::FAIL_AUTH;
         }
+        if ($httpcode === 408 || $httpcode === 429) {
+            // Kept apart from the other 4xx: nothing is wrong with the request, so
+            // "look for a plugin update" would be the wrong advice for a rate limit.
+            return self::FAIL_BUSY;
+        }
         if ($httpcode >= 500) {
             return self::FAIL_SERVER;
         }
@@ -685,7 +693,7 @@ class client {
 
         $info = $curl->get_info();
         $httpcode = (int)($info['http_code'] ?? 0);
-        if ($httpcode === 0 && !empty($curl->error)) {
+        if ($httpcode === 0 && is_string($curl->error) && $curl->error !== '') {
             // curl gave up before any response arrived; its message is the only clue
             // an admin has about why (name resolution, TLS, proxy, timeout).
             $info['transport_error'] = (string) $curl->error;

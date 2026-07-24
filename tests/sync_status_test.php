@@ -251,17 +251,73 @@ final class sync_status_test extends \advanced_testcase {
         );
     }
 
+    public function test_a_dead_api_is_not_retried_once_per_category_key(): void {
+        set_config('enabled', 1, 'local_credentiumclaim');
+        $u = $this->getDataGenerator()->create_user();
+
+        // Three credentials that resolve to three different API keys, as a connector in
+        // category mode produces. Without the degradation guard each one would pay a
+        // full retry ladder against an API already known to be down.
+        $courses = [
+            $this->getDataGenerator()->create_course(),
+            $this->getDataGenerator()->create_course(),
+            $this->getDataGenerator()->create_course(),
+        ];
+        $source = [];
+        foreach ($courses as $i => $course) {
+            $source[] = (object) [
+                'id' => $i + 1,
+                'userid' => $u->id,
+                'courseid' => (int) $course->id,
+                'credentialid' => 'rq-' . ($i + 1),
+            ];
+        }
+
+        $task = $this->make_failing_task($source, 500, true);
+
+        $this->run_task($task);
+
+        $this->assertSame(
+            5,
+            $task->countingclient->calls,
+            'The first group may retry (3 calls); once the service has failed the rest get one attempt each.'
+        );
+        $this->assertSame('3', get_config('local_credentiumclaim', 'lastrununanswered'));
+        $this->assertSame('0', get_config('local_credentiumclaim', 'lastrununmatched'));
+    }
+
+    public function test_a_rate_limit_is_not_mistaken_for_a_bad_request(): void {
+        set_config('enabled', 1, 'local_credentiumclaim');
+        $u = $this->getDataGenerator()->create_user();
+
+        $this->run_task($this->make_failing_task(
+            [(object) ['id' => 1, 'userid' => $u->id, 'courseid' => null, 'credentialid' => 'rq-1']],
+            429
+        ));
+
+        // "Check for a plugin update" is useless advice for a rate limit; the admin
+        // needs to hear that backing off is already happening.
+        $this->assertSame(
+            \local_credentiumclaim\api\client::FAIL_BUSY,
+            get_config('local_credentiumclaim', 'lastrunerrorkind')
+        );
+    }
+
     /**
      * Build a sync task whose every API call fails with the given status.
      *
      * @param \stdClass[] $source Fake source issuances.
      * @param int $httpcode Status to answer with (0 means the call never completed).
+     * @param bool $percourse Give each course its own credentials, as category mode does,
+     *                        so the task polls one group per course instead of one overall.
      * @return \local_credentiumclaim\task\sync_status
      */
-    private function make_failing_task(array $source, int $httpcode) {
+    private function make_failing_task(array $source, int $httpcode, bool $percourse = false) {
         $client = new class ('https://api.example.com', 'pub.key', $httpcode) extends \local_credentiumclaim\api\client {
             /** @var int Status every call answers with. */
             private int $httpcode;
+            /** @var int How many HTTP calls were attempted. */
+            public int $calls = 0;
 
             /**
              * Configure the client double with a canned failure.
@@ -276,7 +332,7 @@ final class sync_status_test extends \advanced_testcase {
             }
 
             /**
-             * Always fail.
+             * Always fail, counting the attempts.
              *
              * @param string $method HTTP method.
              * @param string $url Request URL.
@@ -285,6 +341,7 @@ final class sync_status_test extends \advanced_testcase {
              * @return array [http_code, response_body, curl_info]
              */
             protected function raw_request(string $method, string $url, array $headers, ?string $body): array {
+                $this->calls++;
                 return [$this->httpcode, '', []];
             }
 
@@ -302,6 +359,10 @@ final class sync_status_test extends \advanced_testcase {
         $task = new class extends \local_credentiumclaim\task\sync_status {
             /** @var \stdClass[] */
             public array $source = [];
+            /** @var bool Whether each course resolves to its own credentials. */
+            public bool $percourse = false;
+            /** @var \local_credentiumclaim\api\client|null The counting client double. */
+            public $countingclient = null;
 
             /**
              * Return the canned source issuances (bounded by the limit).
@@ -312,8 +373,25 @@ final class sync_status_test extends \advanced_testcase {
             protected function fetch_source_issuances(int $limit): array {
                 return array_slice($this->source, 0, $limit);
             }
+
+            /**
+             * Resolve credentials per course, so grouping can be exercised without the
+             * connector plugin (whose category resolver a bare checkout may not have).
+             *
+             * @param \stdClass $row Tracking row.
+             * @return \stdClass|null
+             */
+            protected function resolve_config(\stdClass $row): ?\stdClass {
+                if (!$this->percourse) {
+                    return parent::resolve_config($row);
+                }
+                $courseid = (int) ($row->courseid ?? 0);
+                return (object) ['apiurl' => 'https://api.example.com', 'apikey' => 'key-' . $courseid];
+            }
         };
         $task->source = $source;
+        $task->percourse = $percourse;
+        $task->countingclient = $client;
         $task->set_client($client);
         return $task;
     }

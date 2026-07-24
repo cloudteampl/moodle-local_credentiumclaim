@@ -90,6 +90,7 @@ $string['report_connection_ok'] = 'Inherited from Credentium® Integration ({$a}
 $string['report_count'] = 'Count';
 $string['report_diagnostics'] = 'Diagnostics';
 $string['report_error_auth'] = 'Credentium® refused the API key. In the Credentium® Integration plugin, check that the key is still valid and that it carries the "credentials:read" scope — a key that may only issue credentials cannot read their status.';
+$string['report_error_busy'] = 'Credentium® asked the plugin to slow down, or timed out while answering. The plugin backs off and retries on its own, so no action is normally needed. If it happens on every run, raise the status check interval in the plugin settings.';
 $string['report_error_client'] = 'Credentium® rejected the request itself. This normally means the plugin and the Credentium® API are out of step: check whether a plugin update is available, and quote the technical detail above if you contact support.';
 $string['report_error_generic'] = 'The last status check failed. Quote the technical detail above if you contact support.';
 $string['report_error_network'] = 'The Credentium® API could not be reached at all. Check that this server can make outbound HTTPS requests to the configured address — a proxy, a firewall rule or DNS is the usual cause.';

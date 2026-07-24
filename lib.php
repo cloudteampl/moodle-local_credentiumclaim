@@ -187,7 +187,11 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
 function local_credentiumclaim_run_error_advice($kind) {
     $known = [
         \local_credentiumclaim\api\client::FAIL_AUTH => 'report_error_auth',
+        // FAIL_CLIENT also covers a client that was never configured, which cannot be
+        // reached today (connector_config rejects incomplete credentials before a client
+        // is built) but would land here with the same "the request was wrong" advice.
         \local_credentiumclaim\api\client::FAIL_CLIENT => 'report_error_client',
+        \local_credentiumclaim\api\client::FAIL_BUSY => 'report_error_busy',
         \local_credentiumclaim\api\client::FAIL_SERVER => 'report_error_server',
         \local_credentiumclaim\api\client::FAIL_NETWORK => 'report_error_network',
     ];
