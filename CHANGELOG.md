@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-07-24
+
+### Changed
+- **Status writes are lock-free again in the steady state.** 1.3.0 introduced a
+  per-row lock in `apply_remote_status()` to stop the cron sync and the page-load
+  refresher from double-notifying on the same processing → issued transition —
+  but it paid the lock-acquire + fresh-read cost on *every* write, up to 1000
+  times per cron run (noticeable on multi-node sites using DB/Redis lock
+  factories). The decision is now tiered: a non-"issued" status can never
+  notify, and an incoming "issued" whose caller snapshot already says "issued"
+  provably transitioned in the past (snapshots only ever lag the database), so
+  both cases are a single idempotent UPDATE with no lock and no extra read. Only
+  a genuine transition candidate — roughly once per credential lifetime — takes
+  the per-row lock and decides against a fresh read. Exactly-once notification
+  semantics are unchanged and regression-tested, including a DB-read-count test
+  that pins the steady state to the lock-free path. (A conditional
+  `UPDATE … WHERE remotestatus = :old` driving the *notification decision* was
+  considered and rejected: Moodle's DML API does not expose affected-row counts,
+  so it cannot be done portably.)
+- **Status writes are now monotonic.** Because writers race without a common
+  lock (and always have: a slow API answer describes the past even under 1.3.0's
+  all-writes lock), every status write now refuses to regress a more-advanced
+  stored state (processing/unknown < issued < claimed/failed) via a guarded
+  single-statement UPDATE, and the notify decision only fires when the fresh
+  read shows a pre-issued state and a post-write verification confirms the
+  "issued" actually stuck. A late "issued" answer landing after a concurrent
+  writer stored "claimed" can no longer resurrect the credential on the
+  "My credentials" page or emit a "ready to claim" notification for something
+  already claimed. Poll bookkeeping (`timechecked`) is stamped even for refused
+  writes, so the poll queue keeps moving. Both interleavings are
+  regression-tested with stale-snapshot replays.
+
 ## [1.3.0] - 2026-07-24
 
 ### Fixed
@@ -132,6 +164,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Release pipeline (`deploy.sh` + GitHub Actions) and a `moodle-plugin-ci`
   workflow covering Moodle 4.5 and 5.0.
 
+[1.3.1]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.3.1
 [1.3.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.3.0
 [1.2.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.1.0
