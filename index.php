@@ -170,7 +170,7 @@ if ($lastrunresult === sync_status::RESULT_ERROR) {
     // An API failure explains the missing statuses on its own; blaming the
     // identifiers here would send the admin looking in the wrong place.
     // The table above already carries the raw failure, so this box carries the part
-    // an admin cannot derive from it: which of the four causes it was, and what to do.
+    // an admin cannot derive from it: which of the five causes it was, and what to do.
     echo $OUTPUT->notification(
         local_credentiumclaim_run_error_message(),
         \core\output\notification::NOTIFY_ERROR
