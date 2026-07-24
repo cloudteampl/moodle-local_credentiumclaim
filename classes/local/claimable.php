@@ -38,6 +38,9 @@ class claimable {
     /** @var string Cache-key prefix for the count of credentials the page will list. */
     private const VISIBLE_CACHE_PREFIX = 'visible';
 
+    /** @var int Column width of credentialid, per db/install.xml. */
+    private const CREDENTIALID_MAX = 255;
+
     /** @var string Remote status: still being issued. */
     public const STATUS_PROCESSING = 'processing';
     /** @var string Remote status: issued and ready to claim. */
@@ -402,6 +405,14 @@ class claimable {
             return;
         }
         if (($row->credentialid ?? null) === $credentialid) {
+            return;
+        }
+        if (\core_text::strlen($credentialid) > self::CREDENTIALID_MAX) {
+            // Longer than the column: storing it would throw and abort the whole poll
+            // for a value that cannot be a Credentium identifier anyway. Truncating
+            // would be worse still — it would build a wallet link to nowhere.
+            require_once(__DIR__ . '/../../lib.php');
+            local_credentiumclaim_log('Ignoring an oversized credentialId', ['rowid' => (int) $row->id]);
             return;
         }
         $DB->set_field(self::TABLE, 'credentialid', $credentialid, ['id' => $row->id]);

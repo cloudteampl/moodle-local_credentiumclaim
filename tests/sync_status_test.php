@@ -24,6 +24,7 @@
 
 namespace local_credentiumclaim;
 
+use local_credentiumclaim\api\client as apiclient;
 use local_credentiumclaim\local\claimable;
 
 /**
@@ -70,8 +71,8 @@ final class sync_status_test extends \advanced_testcase {
             ['rq-1' => 'cred-1']
         ));
 
-        // "My credentials" links a claimed credential to its page in the wallet, which
-        // needs the credential's own id — not the issue-request id we poll with.
+        // The page links a claimed credential to its page in the wallet, which needs
+        // the credential's own id — not the issue-request id we poll with.
         $row = $DB->get_record(claimable::TABLE, ['credentialkey' => 'rq-1'], '*', MUST_EXIST);
         $this->assertSame('cred-1', $row->credentialid);
     }
@@ -422,8 +423,7 @@ final class sync_status_test extends \advanced_testcase {
      * @return \local_credentiumclaim\task\sync_status
      */
     private function make_task(array $source, array $statusmap, array $credentialids = []) {
-        $client = new class ('https://api.example.com', 'pub.key', $statusmap, $credentialids)
-            extends \local_credentiumclaim\api\client {
+        $client = new class ('https://api.example.com', 'pub.key', $statusmap, $credentialids) extends apiclient {
             /** @var array Map of issueRequestId to status string. */
             private array $statusmap;
             /** @var array Map of issueRequestId to credentialId. */

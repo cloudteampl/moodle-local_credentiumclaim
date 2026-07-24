@@ -214,9 +214,14 @@ function local_credentiumclaim_remember_wallet_base($claimurl) {
     if (!empty($parts['port'])) {
         $origin .= ':' . ((int) $parts['port']);
     }
-    if ($origin === (string) get_config('local_credentiumclaim', 'walletbaselearned')) {
+    $previous = (string) get_config('local_credentiumclaim', 'walletbaselearned');
+    if ($origin === $previous) {
         return;
     }
+    // This value is site-wide: it decides where every learner's "Open in wallet"
+    // button points. It is only ever taken from an address the API itself handed us,
+    // but a change is worth a trace so an unexpected one can be accounted for.
+    local_credentiumclaim_log('Wallet address learned', ['from' => $previous, 'to' => $origin]);
     set_config('walletbaselearned', $origin, 'local_credentiumclaim');
 }
 

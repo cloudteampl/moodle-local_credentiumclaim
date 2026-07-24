@@ -55,8 +55,8 @@ function xmldb_local_credentiumclaim_upgrade($oldversion) {
     }
 
     if ($oldversion < 2026072403) {
-        // "My credentials" now keeps showing a credential after it has been claimed,
-        // with a link into the wallet. That link is built from the Credentium
+        // The "My credentials" page now keeps showing a credential after it has been
+        // claimed, with a link into the wallet. That link is built from the Credentium
         // credentialId, which the status endpoint has always returned and the plugin
         // has always thrown away. Existing rows fill theirs in on their next poll.
         $table = new xmldb_table('local_credentiumclaim_status');
