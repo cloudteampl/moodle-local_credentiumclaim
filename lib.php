@@ -186,10 +186,35 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
 function local_credentiumclaim_wallet_base_url() {
     $configured = trim((string) get_config('local_credentiumclaim', 'walleturl'));
     if ($configured !== '') {
-        return rtrim($configured, '/');
+        // Held to the same http(s) rule as a learned address. PARAM_URL on the
+        // settings field is broader than that (it would pass ftp:, mailto:), and this
+        // value ends up in an href on a learner's page, so the narrower rule is
+        // applied where the value is read rather than only where it is written.
+        return local_credentiumclaim_http_origin($configured) !== null ? rtrim($configured, '/') : null;
     }
     $learned = trim((string) get_config('local_credentiumclaim', 'walletbaselearned'));
     return $learned !== '' ? $learned : null;
+}
+
+/**
+ * The http(s) origin of a URL: scheme, host and port, and nothing else.
+ *
+ * @param string $url Any URL.
+ * @return string|null Null unless it is an absolute http or https URL.
+ */
+function local_credentiumclaim_http_origin($url) {
+    $parts = parse_url((string) $url);
+    if (empty($parts['scheme']) || empty($parts['host'])) {
+        return null;
+    }
+    if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+        return null;
+    }
+    $origin = strtolower($parts['scheme']) . '://' . $parts['host'];
+    if (!empty($parts['port'])) {
+        $origin .= ':' . ((int) $parts['port']);
+    }
+    return $origin;
 }
 
 /**
@@ -203,16 +228,9 @@ function local_credentiumclaim_wallet_base_url() {
  * @return void
  */
 function local_credentiumclaim_remember_wallet_base($claimurl) {
-    $parts = parse_url((string) $claimurl);
-    if (empty($parts['scheme']) || empty($parts['host'])) {
+    $origin = local_credentiumclaim_http_origin($claimurl);
+    if ($origin === null) {
         return;
-    }
-    if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
-        return;
-    }
-    $origin = strtolower($parts['scheme']) . '://' . $parts['host'];
-    if (!empty($parts['port'])) {
-        $origin .= ':' . ((int) $parts['port']);
     }
     $previous = (string) get_config('local_credentiumclaim', 'walletbaselearned');
     if ($origin === $previous) {

@@ -103,6 +103,15 @@ final class wallet_url_test extends \advanced_testcase {
         $this->assertSame('https://wallet.chosen.example', local_credentiumclaim_wallet_base_url());
     }
 
+    public function test_a_configured_address_that_is_not_http_is_refused(): void {
+        // PARAM_URL on the settings field is broader than what belongs in a link on a
+        // learner's page, so the narrower rule is enforced where the value is read.
+        set_config('walleturl', 'ftp://wallet.example.com', 'local_credentiumclaim');
+
+        $this->assertNull(local_credentiumclaim_wallet_base_url());
+        $this->assertNull(local_credentiumclaim_wallet_credential_url('cred-1'));
+    }
+
     public function test_a_trailing_slash_in_the_setting_does_not_double_up(): void {
         set_config('walleturl', 'https://wallet.example.com/', 'local_credentiumclaim');
 
