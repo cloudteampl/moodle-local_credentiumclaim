@@ -762,8 +762,8 @@ class client {
         $info = $curl->get_info();
         $httpcode = (int)($info['http_code'] ?? 0);
         if ($httpcode === 0 && is_string($curl->error) && $curl->error !== '') {
-            // cURL gave up before any response arrived; its message is the only clue
-            // an admin has about why (name resolution, TLS, proxy, timeout).
+            // Nothing was received, so curl's own message is the only clue an admin
+            // has about why (name resolution, TLS, proxy, timeout).
             $info['transport_error'] = (string) $curl->error;
         }
         $info['response_headers'] = $curl->getResponse();
