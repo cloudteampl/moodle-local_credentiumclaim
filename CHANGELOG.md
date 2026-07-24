@@ -20,8 +20,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the per-row lock and decides against a fresh read. Exactly-once notification
   semantics are unchanged and regression-tested, including a DB-read-count test
   that pins the steady state to the lock-free path. (A conditional
-  `UPDATE … WHERE remotestatus = :old` was considered and rejected: Moodle's DML
-  API does not expose affected-row counts, so it cannot be done portably.)
+  `UPDATE … WHERE remotestatus = :old` driving the *notification decision* was
+  considered and rejected: Moodle's DML API does not expose affected-row counts,
+  so it cannot be done portably.)
+- **Status writes are now monotonic.** Because writers race without a common
+  lock (and always have: a slow API answer describes the past even under 1.3.0's
+  all-writes lock), every status write now refuses to regress a more-advanced
+  stored state (processing/unknown < issued < claimed/failed) via a guarded
+  single-statement UPDATE, and the notify decision only fires when the fresh
+  read shows a pre-issued state. A late "issued" answer landing after a
+  concurrent writer stored "claimed" can no longer resurrect the credential on
+  the "My credentials" page or emit a "ready to claim" notification for
+  something already claimed. Poll bookkeeping (`timechecked`) is stamped even
+  for refused writes, so the poll queue keeps moving. Both interleavings are
+  regression-tested with stale-snapshot replays.
 
 ## [1.3.0] - 2026-07-24
 

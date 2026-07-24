@@ -167,6 +167,44 @@ final class claimable_test extends \advanced_testcase {
         );
     }
 
+    public function test_a_terminal_state_is_never_regressed_by_a_stale_writer(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+
+        // Writer A reads the row while it still says "processing", then its API
+        // call stalls; meanwhile the credential is issued and claimed for real.
+        $stalesnapshot = $this->row($user->id, 'key-1');
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued');
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'claimed');
+
+        // A's late "issued" answer finally lands: it must neither resurrect the
+        // credential nor signal a claim-me moment for something already claimed.
+        $this->assertFalse(claimable::apply_remote_status($stalesnapshot, 'issued'));
+        $this->assertSame('claimed', $this->row($user->id, 'key-1')->remotestatus);
+        $this->assertCount(0, claimable::list_for_user((int) $user->id));
+
+        // The same for a late lock-free tier-1 write ("processing" arriving late).
+        $this->assertFalse(claimable::apply_remote_status($stalesnapshot, 'processing'));
+        $this->assertSame('claimed', $this->row($user->id, 'key-1')->remotestatus);
+    }
+
+    public function test_issued_is_not_downgraded_by_a_late_processing_answer(): void {
+        global $DB;
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        $stalesnapshot = $this->row($user->id, 'key-1');
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued');
+
+        // Make the bookkeeping stamp observable.
+        $DB->set_field(claimable::TABLE, 'timechecked', 1000, ['id' => $stalesnapshot->id]);
+
+        $this->assertFalse(claimable::apply_remote_status($stalesnapshot, 'processing'));
+
+        $row = $this->row($user->id, 'key-1');
+        $this->assertSame('issued', $row->remotestatus, 'A late answer must not downgrade the stored state.');
+        $this->assertGreaterThan(1000, (int) $row->timechecked, 'The check itself must still be book-kept.');
+    }
+
     public function test_pollable_excludes_terminal_statuses(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'k-proc', null, null);

@@ -235,14 +235,21 @@ class claimable {
      * 1000 statuses per run and locking every write would multiply its round-trips:
      *
      * 1. Incoming status is not "issued": no notification can possibly result, so
-     *    a single idempotent UPDATE suffices (no lock, no extra read).
+     *    a single guarded UPDATE suffices (no lock, no extra read).
      * 2. Incoming "issued" and the caller's snapshot already says "issued": a
      *    snapshot can only ever lag the database, so the transition provably
-     *    happened in the past and was some earlier writer's to signal. Plain UPDATE.
+     *    happened in the past and was some earlier writer's to signal. One UPDATE.
      * 3. Otherwise — a candidate transition into "issued" — the decision is made
      *    against a fresh read under a per-row lock, so exactly one of two
      *    concurrent writers observes it. This fires roughly once per credential
      *    lifetime, keeping steady-state cron traffic entirely lock-free.
+     *
+     * Because tiers 1 and 2 write without the lock, every write (including tier
+     * 3's) goes through {@see self::write_status()}, which is monotonic: it never
+     * regresses a more-advanced stored state. A late "issued" answer arriving
+     * after a concurrent writer stored "claimed" therefore cannot resurrect the
+     * credential, and tier 3 only signals when the fresh read shows a pre-issued
+     * state — never when the moment has already passed.
      *
      * The caller's $row must include id and userid; remotestatus, when present, is
      * only a fast-path hint — a stale or missing value costs an unnecessary lock,
@@ -290,9 +297,10 @@ class claimable {
                 return false;
             }
             self::write_status($row, $normalized, $current !== $normalized);
-            // Only a genuine transition into "issued" is a claim-me moment; a fresh
-            // read of "issued" means a concurrent writer beat us to it.
-            return $current !== self::STATUS_ISSUED;
+            // Only an upward transition from a pre-issued state is a claim-me
+            // moment: a fresh read of "issued" means a concurrent writer beat us to
+            // it, and "claimed"/"failed" mean the moment has already passed.
+            return in_array($current, [self::STATUS_PROCESSING, self::STATUS_UNKNOWN], true);
         } finally {
             $lock->release();
         }
@@ -300,6 +308,12 @@ class claimable {
 
     /**
      * Persist a polled status onto a row and optionally invalidate cached counts.
+     *
+     * The write is monotonic: a stored state is never regressed by a
+     * less-advanced incoming one (see {@see self::states_above()}), because
+     * callers race without a common lock and a slow API answer can describe the
+     * past. The poll bookkeeping (timechecked/timemodified) is stamped either
+     * way — the check did happen, its answer was merely out of date.
      *
      * @param \stdClass $row Tracking row (must include id and userid).
      * @param string $normalized Normalised status to store.
@@ -309,15 +323,55 @@ class claimable {
     private static function write_status(\stdClass $row, string $normalized, bool $purge): void {
         global $DB;
         $now = time();
-        $DB->update_record(self::TABLE, (object) [
-            'id' => $row->id,
-            'remotestatus' => $normalized,
-            'timechecked' => $now,
-            'timemodified' => $now,
-        ]);
+        $higher = self::states_above($normalized);
+        if (empty($higher)) {
+            // Terminal incoming state: nothing outranks it, plain write.
+            $DB->update_record(self::TABLE, (object) [
+                'id' => $row->id,
+                'remotestatus' => $normalized,
+                'timechecked' => $now,
+                'timemodified' => $now,
+            ]);
+        } else {
+            [$insql, $inparams] = $DB->get_in_or_equal($higher, SQL_PARAMS_NAMED, 'keep');
+            $sql = "UPDATE {" . self::TABLE . "}
+                       SET remotestatus = CASE WHEN remotestatus $insql
+                                               THEN remotestatus ELSE :newstatus END,
+                           timechecked = :timechecked,
+                           timemodified = :timemodified
+                     WHERE id = :id";
+            $DB->execute($sql, $inparams + [
+                'newstatus' => $normalized,
+                'timechecked' => $now,
+                'timemodified' => $now,
+                'id' => $row->id,
+            ]);
+        }
         if ($purge) {
             self::purge_cache((int) $row->userid);
         }
+    }
+
+    /**
+     * The states a given status must never overwrite.
+     *
+     * Progression rank: processing/unknown (0) < issued (1) < claimed/failed (2).
+     * A write may keep or advance the rank, never lower it; the two terminal
+     * states may replace each other, since the remote is the source of truth.
+     *
+     * @param string $status Normalised status about to be written.
+     * @return string[] Statuses that outrank it.
+     */
+    private static function states_above(string $status): array {
+        $rank = [
+            self::STATUS_PROCESSING => 0,
+            self::STATUS_UNKNOWN => 0,
+            self::STATUS_ISSUED => 1,
+            self::STATUS_CLAIMED => 2,
+            self::STATUS_FAILED => 2,
+        ];
+        $own = $rank[$status] ?? 0;
+        return array_keys(array_filter($rank, static fn(int $r): bool => $r > $own));
     }
 
     /**
