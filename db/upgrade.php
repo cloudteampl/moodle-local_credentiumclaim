@@ -55,10 +55,10 @@ function xmldb_local_credentiumclaim_upgrade($oldversion) {
     }
 
     if ($oldversion < 2026072403) {
-        // The "My credentials" page now keeps showing a credential after it has been
-        // claimed, with a link into the wallet. That link is built from the Credentium
-        // credentialId, which the status endpoint has always returned and the plugin
-        // has always thrown away. Existing rows fill theirs in on their next poll.
+        // Store the Credentium credentialId the status endpoint has always returned
+        // and the plugin has always thrown away. It identifies the credential itself
+        // rather than the request that produced it, so a support query can be tied to
+        // Credentium's own records. Existing rows fill theirs in on their next poll.
         $table = new xmldb_table('local_credentiumclaim_status');
         $field = new xmldb_field('credentialid', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'courseid');
         if (!$dbman->field_exists($table, $field)) {

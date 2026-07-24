@@ -389,6 +389,10 @@ class claimable {
     /**
      * Store the Credentium credentialId a poll reported, if it is news.
      *
+     * Kept for traceability: it names the credential itself rather than the request
+     * that produced it, which is what Credentium support asks for. It is deliberately
+     * not what the wallet link is built from — see local_credentiumclaim_wallet_url().
+     *
      * Deliberately outside {@see self::write_status()}: the status write is a
      * carefully guarded, monotonic statement and this value needs none of that.
      * A credentialId is assigned once by Credentium and never changes, so a plain

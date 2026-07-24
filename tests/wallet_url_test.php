@@ -29,7 +29,7 @@ namespace local_credentiumclaim;
  *
  * @covers ::local_credentiumclaim_wallet_base_url
  * @covers ::local_credentiumclaim_remember_wallet_base
- * @covers ::local_credentiumclaim_wallet_credential_url
+ * @covers ::local_credentiumclaim_wallet_url
  */
 final class wallet_url_test extends \advanced_testcase {
     public function setUp(): void {
@@ -109,40 +109,43 @@ final class wallet_url_test extends \advanced_testcase {
         set_config('walleturl', 'ftp://wallet.example.com', 'local_credentiumclaim');
 
         $this->assertNull(local_credentiumclaim_wallet_base_url());
-        $this->assertNull(local_credentiumclaim_wallet_credential_url('cred-1'));
+        $this->assertNull(local_credentiumclaim_wallet_url());
     }
 
     public function test_a_trailing_slash_in_the_setting_does_not_double_up(): void {
         set_config('walleturl', 'https://wallet.example.com/', 'local_credentiumclaim');
 
-        $url = local_credentiumclaim_wallet_credential_url('cred-1');
+        $url = local_credentiumclaim_wallet_url();
 
-        $this->assertStringStartsWith('https://wallet.example.com/account/login', $url->out(false));
+        $this->assertSame('https://wallet.example.com/my-credentials', $url->out(false));
     }
 
-    public function test_the_credential_link_matches_what_the_api_itself_builds(): void {
+    public function test_the_link_goes_to_the_wallets_credential_list(): void {
         set_config('walleturl', 'https://wallet.example.com', 'local_credentiumclaim');
 
-        $url = local_credentiumclaim_wallet_credential_url('8b1b7c3a');
+        $url = local_credentiumclaim_wallet_url();
 
-        // Same shape as ClaimLinkBuilder.BuildLoginUrl on the issuer: the wallet
-        // enforces authentication on the credential page, so this carries no secret.
-        $this->assertSame(
-            'https://wallet.example.com/account/login?returnUrl=%2Fcredentials%2F8b1b7c3a',
-            $url->out(false)
-        );
+        // Not a deep link to one credential: the wallet keys credentials by an id it
+        // mints itself on delivery, which the issuer API never discloses. The id the
+        // API does return belongs to the issuer's database, and feeding it to the
+        // wallet's public /credentials/{id} page yields "Unavailable".
+        $this->assertSame('https://wallet.example.com/my-credentials', $url->out(false));
     }
 
-    public function test_no_link_is_offered_when_something_is_missing(): void {
-        // No wallet address known yet.
-        $this->assertNull(local_credentiumclaim_wallet_credential_url('cred-1'));
-
+    public function test_the_link_never_points_at_the_wallets_public_credential_page(): void {
         set_config('walleturl', 'https://wallet.example.com', 'local_credentiumclaim');
 
-        // Address known, but the credential has no id (still processing, or tracked
-        // before the plugin started storing it). A button leading nowhere is worse
-        // than none, so the page falls back to plain "Claimed".
-        $this->assertNull(local_credentiumclaim_wallet_credential_url(null));
-        $this->assertNull(local_credentiumclaim_wallet_credential_url(''));
+        $url = local_credentiumclaim_wallet_url()->out(false);
+
+        // Guards the actual bug this replaced: /credentials/{issuer credentialId}
+        // resolved to the wallet's public page for a credential that is not public.
+        $this->assertStringNotContainsString('/credentials/', $url);
+        $this->assertStringNotContainsString('returnUrl', $url);
+    }
+
+    public function test_no_link_is_offered_until_the_wallet_address_is_known(): void {
+        // A button leading nowhere is worse than none, so the page falls back to
+        // plain "Claimed" until the address has been learned or configured.
+        $this->assertNull(local_credentiumclaim_wallet_url());
     }
 }

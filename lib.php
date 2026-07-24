@@ -244,22 +244,24 @@ function local_credentiumclaim_remember_wallet_base($claimurl) {
 }
 
 /**
- * Link to a claimed credential inside the Credentium Wallet.
+ * Link to the learner's credential list in the Credentium Wallet.
  *
- * Mirrors the address the API itself builds for a "sign in and claim" link, minus
- * the invitation code: the wallet enforces authentication on the credential page, so
- * this carries no secret and can safely be rendered as an ordinary link.
+ * Deliberately the list rather than one credential. A deep link would need the
+ * wallet's own id for that credential, and the wallet is a separate system with its
+ * own keys: it mints that id when the credential is delivered, and no endpoint of
+ * the issuer API ever discloses it. The identifier the API does return
+ * (`credentialId`) belongs to the issuer's database and means nothing to the wallet
+ * — pointing a learner at `/credentials/{that}` lands them on the wallet's *public*
+ * page for a credential that is not public, which is the "Unavailable" screen.
  *
- * @param string|null $credentialid Credentium credentialId for the credential.
- * @return \moodle_url|null Null when either the wallet address or the id is unknown.
+ * The wallet requires authentication for this page and returns the learner to it
+ * after signing in, so the link carries no secret and always resolves.
+ *
+ * @return \moodle_url|null Null when the wallet address is not known.
  */
-function local_credentiumclaim_wallet_credential_url($credentialid) {
+function local_credentiumclaim_wallet_url() {
     $base = local_credentiumclaim_wallet_base_url();
-    $credentialid = trim((string) $credentialid);
-    if ($base === null || $credentialid === '') {
-        return null;
-    }
-    return new moodle_url($base . '/account/login', ['returnUrl' => '/credentials/' . $credentialid]);
+    return $base === null ? null : new moodle_url($base . '/my-credentials');
 }
 
 /**

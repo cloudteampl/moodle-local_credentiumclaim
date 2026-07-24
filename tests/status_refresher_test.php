@@ -206,6 +206,29 @@ final class status_refresher_test extends \advanced_testcase {
         $this->assertSame('processing', $this->row($user->id, 'key-1')->remotestatus);
     }
 
+    public function test_the_page_refreshes_before_it_draws_the_header(): void {
+        global $CFG;
+
+        // The header draws the user menu and the banner, and both count this learner's
+        // claimable credentials. Refreshing after it left them a request behind: the
+        // menu showed "My credentials" with no count while the table right below it
+        // already listed a credential as ready to claim.
+        //
+        // The ordering is a property of the page script, and this plugin has no Behat
+        // suite to drive it, so it is pinned here rather than left to be re-broken.
+        $page = file_get_contents($CFG->dirroot . '/local/credentiumclaim/mycredentials.php');
+        $refresh = strpos($page, 'refresh_for_user');
+        $header = strpos($page, '$OUTPUT->header()');
+
+        $this->assertNotFalse($refresh, 'The page must still refresh statuses.');
+        $this->assertNotFalse($header);
+        $this->assertLessThan(
+            $header,
+            $refresh,
+            'Statuses must be refreshed before the header renders the menu and banner.'
+        );
+    }
+
     /**
      * Build a refresher whose client answers from a canned status map.
      *
