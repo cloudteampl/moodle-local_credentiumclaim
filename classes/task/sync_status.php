@@ -279,7 +279,12 @@ class sync_status extends \core\task\scheduled_task {
             foreach ($group['rows'] as $row) {
                 $polled++;
                 if (isset($statuses[$row->credentialkey])) {
-                    $becameready = claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
+                    $snapshot = $statuses[$row->credentialkey];
+                    $becameready = claimable::apply_remote_status(
+                        $row,
+                        $snapshot->status,
+                        $snapshot->credentialid ?? null
+                    );
                     if ($becameready) {
                         // Best-effort push; a failure is counted so the report can flag it.
                         if (notifier::credential_ready($row)) {

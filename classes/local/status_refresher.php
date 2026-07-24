@@ -164,7 +164,12 @@ class status_refresher {
             $unreported = [];
             foreach ($group['rows'] as $row) {
                 if (isset($statuses[$row->credentialkey])) {
-                    $becameready = claimable::apply_remote_status($row, $statuses[$row->credentialkey]->status);
+                    $snapshot = $statuses[$row->credentialkey];
+                    $becameready = claimable::apply_remote_status(
+                        $row,
+                        $snapshot->status,
+                        $snapshot->credentialid ?? null
+                    );
                     if ($becameready) {
                         // Same exactly-once semantics as cron: apply_remote_status()
                         // decides the transition under a per-row lock against the

@@ -59,6 +59,23 @@ final class sync_status_test extends \advanced_testcase {
         $this->assertCount(0, claimable::list_for_user($u2->id));
     }
 
+    public function test_the_sync_stores_the_credential_id_the_api_reports(): void {
+        global $DB;
+        set_config('enabled', 1, 'local_credentiumclaim');
+        $u = $this->getDataGenerator()->create_user();
+
+        $this->run_task($this->make_task(
+            [(object) ['id' => 1, 'userid' => $u->id, 'courseid' => null, 'credentialid' => 'rq-1']],
+            ['rq-1' => 'claimed'],
+            ['rq-1' => 'cred-1']
+        ));
+
+        // "My credentials" links a claimed credential to its page in the wallet, which
+        // needs the credential's own id — not the issue-request id we poll with.
+        $row = $DB->get_record(claimable::TABLE, ['credentialkey' => 'rq-1'], '*', MUST_EXIST);
+        $this->assertSame('cred-1', $row->credentialid);
+    }
+
     public function test_execute_is_a_noop_when_disabled(): void {
         global $DB;
         set_config('enabled', 0, 'local_credentiumclaim');
@@ -401,12 +418,16 @@ final class sync_status_test extends \advanced_testcase {
      *
      * @param \stdClass[] $source Fake source issuances.
      * @param array $statusmap Map of issueRequestId to status string.
+     * @param array $credentialids Optional map of issueRequestId to credentialId.
      * @return \local_credentiumclaim\task\sync_status
      */
-    private function make_task(array $source, array $statusmap) {
-        $client = new class ('https://api.example.com', 'pub.key', $statusmap) extends \local_credentiumclaim\api\client {
+    private function make_task(array $source, array $statusmap, array $credentialids = []) {
+        $client = new class ('https://api.example.com', 'pub.key', $statusmap, $credentialids)
+            extends \local_credentiumclaim\api\client {
             /** @var array Map of issueRequestId to status string. */
             private array $statusmap;
+            /** @var array Map of issueRequestId to credentialId. */
+            private array $credentialids;
 
             /**
              * Configure the client double with a canned status map.
@@ -414,10 +435,12 @@ final class sync_status_test extends \advanced_testcase {
              * @param string $url Base URL.
              * @param string $key API key.
              * @param array $statusmap Map of issueRequestId to status string.
+             * @param array $credentialids Map of issueRequestId to credentialId.
              */
-            public function __construct($url, $key, array $statusmap) {
+            public function __construct($url, $key, array $statusmap, array $credentialids = []) {
                 parent::__construct($url, $key);
                 $this->statusmap = $statusmap;
+                $this->credentialids = $credentialids;
             }
 
             /**
@@ -434,7 +457,11 @@ final class sync_status_test extends \advanced_testcase {
                 $results = [];
                 foreach ($ids as $id) {
                     if (isset($this->statusmap[$id])) {
-                        $results[] = ['issueRequestId' => $id, 'status' => $this->statusmap[$id]];
+                        $result = ['issueRequestId' => $id, 'status' => $this->statusmap[$id]];
+                        if (isset($this->credentialids[$id])) {
+                            $result['credentialId'] = $this->credentialids[$id];
+                        }
+                        $results[] = $result;
                     }
                 }
                 return [200, json_encode(['results' => $results]), []];

@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-07-24
+
+### Fixed
+- **"My credentials" disappeared from the user menu the moment a learner claimed
+  the last credential.** The entry was gated on the count of *claimable*
+  credentials, so collecting everything removed the only route back to what had
+  just been collected — and the page it led to said "You have no unclaimed
+  credentials right now", which read as "you have nothing". The entry (and the
+  profile node) now appears for anyone with credentials to see, and carries a
+  count only while something is genuinely waiting. Learners who have never been
+  issued anything still get no entry, so the menu stays clean.
+- **The page offered to message yourself.** "My credentials" ran in a user
+  context, so Moodle drew its profile header above it — avatar, full name and a
+  **Message** button — on a page that is about your own credentials and has
+  nothing to do with messaging. The page now runs in the system context, like the
+  dashboard, and its own name is the heading. The capability is still checked
+  against the user context; only what gets drawn changed.
+
+### Added
+- **Claimed credentials stay listed, with an "Open in wallet" button.** The page
+  used to hide a credential the moment it was claimed, so it worked as a to-do
+  list that emptied itself rather than as a record of what a learner had earned.
+  Claimed credentials now remain, ordered after anything still actionable, each
+  linking straight to its page in the Credentium® Wallet.
+- **The wallet's address is learned, not configured.** The API has no endpoint
+  that states it, but every claim link it mints points into the wallet, so the
+  plugin keeps the origin of the first one it sees — the origin only, never the
+  claim URL itself, which is a single-use secret. A **Credentium® Wallet
+  address** setting exists for the one case learning cannot cover: a site where
+  nobody has ever claimed through Moodle, so there was nothing to learn from. An
+  explicit setting always wins over the learned value. Where neither is known, or
+  the credential predates this release, the row simply reads "Claimed" — a button
+  that led nowhere would be worse than none.
+- The tracking table now stores Credentium's `credentialId` alongside the
+  `issueRequestId` it polls with. The status endpoint has always returned it and
+  the plugin has always discarded it; it is what the wallet link is built from.
+  Existing rows fill theirs in on their next status poll.
+
 ## [1.4.0] - 2026-07-24
 
 ### Fixed

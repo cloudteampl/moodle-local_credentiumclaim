@@ -67,6 +67,10 @@ local_credentium                 local_credentiumclaim
    Credentium for a **single-use claim link** and opens it in a new tab. The link
    either creates a Credentium Wallet account or logs the learner in, then lands
    on the credential. Once claimed, the next status sync clears the reminder.
+4. **Afterwards.** A claimed credential stays on "My credentials" with an **Open
+   in wallet** button, so the page is a record of what a learner has earned rather
+   than a to-do list that empties itself. The user-menu entry likewise stays put
+   once the count reaches zero — it just drops the count.
 
 ## Security & privacy
 
@@ -91,6 +95,7 @@ Site administration → Plugins → Local plugins → **Credentium® Claim**:
 | API connection | **Read-only.** Endpoint and key inherited from the Credentium® Integration plugin. |
 | Status check interval | How often the sync task runs (5 min – 4 h). Rewrites the task's cron schedule. |
 | Show reminder banner | Whether to show the top-of-page banner. |
+| Credentium® Wallet address | Where a claimed credential opens. Normally left empty — see below. |
 | Enable debug logging | Writes secret-free diagnostics to the server log. |
 
 There is deliberately **no API URL or API key field here.** Both are inherited
@@ -106,6 +111,28 @@ produce `/api/api/...` 404s.
 If the connector runs in **category mode**, each tracked credential is checked
 using the credentials that apply to its course, and the sync issues one batch
 call per distinct key.
+
+### The wallet address
+
+Opening a credential a learner has already claimed needs the address of the
+Credentium® Wallet, and the API has no endpoint that states it. It does, however,
+give it away every time it mints a claim link, whose URL points into the wallet —
+so the plugin **learns** it from the first claim that goes through Moodle and
+stores the origin (scheme, host, port). Only the origin: the rest of a claim URL
+is a single-use, bearer-equivalent secret, and keeping just the origin is what
+makes remembering it safe.
+
+Leave the **Credentium® Wallet address** setting empty unless claimed credentials
+show no *Open in wallet* button. That happens on a site where nobody has ever
+claimed through Moodle (learners collected their credentials straight from the
+Credentium® email), so there was nothing to learn from. An explicit setting always
+wins over the learned value, which is also how you correct a stale one after the
+wallet moves.
+
+The link itself is `{wallet}/account/login?returnUrl=/credentials/{credentialId}` —
+the same address the API builds for its own "sign in and claim" links, minus the
+invitation code. The wallet enforces authentication on the credential page, so the
+link carries no secret.
 
 ### Required API key scopes
 

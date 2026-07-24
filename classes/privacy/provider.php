@@ -54,6 +54,7 @@ class provider implements
             [
                 'userid' => 'privacy:metadata:local_credentiumclaim_status:userid',
                 'credentialkey' => 'privacy:metadata:local_credentiumclaim_status:credentialkey',
+                'credentialid' => 'privacy:metadata:local_credentiumclaim_status:credentialid',
                 'courseid' => 'privacy:metadata:local_credentiumclaim_status:courseid',
                 'remotestatus' => 'privacy:metadata:local_credentiumclaim_status:remotestatus',
                 'timecreated' => 'privacy:metadata:local_credentiumclaim_status:timecreated',
@@ -135,6 +136,7 @@ class provider implements
                 $data[] = [
                     'coursename' => $coursename,
                     'credentialkey' => $record->credentialkey,
+                    'credentialid' => $record->credentialid,
                     'status' => $record->remotestatus,
                     'timecreated' => transform::datetime($record->timecreated),
                 ];

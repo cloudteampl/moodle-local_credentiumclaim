@@ -56,7 +56,7 @@ final class claimable_test extends \advanced_testcase {
         $this->assertSame(0, claimable::count_for_user($user->id), 'Dismissed credential is not banner-worthy.');
     }
 
-    public function test_claimed_is_removed_from_count_and_list(): void {
+    public function test_claimed_stops_counting_but_stays_on_the_list(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'key-1', null, null);
         claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued');
@@ -64,8 +64,71 @@ final class claimable_test extends \advanced_testcase {
         $this->assertCount(1, claimable::list_for_user($user->id));
 
         claimable::mark_claimed($user->id, $this->row($user->id, 'key-1')->id);
+
+        // Nothing left to nudge the learner about...
         $this->assertSame(0, claimable::count_for_user($user->id));
+        $this->assertSame(0, claimable::count_claimable_for_user($user->id));
+        // ...but dropping it from the page told a learner who had collected everything
+        // that they had nothing, and took away the route back to what they had earned.
+        $this->assertCount(1, claimable::list_for_user($user->id));
+        $this->assertSame(1, claimable::count_visible_for_user($user->id));
+    }
+
+    public function test_a_failed_issuance_is_kept_off_the_learner_page(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'failed');
+
+        // There is nothing a learner can do about a failed issuance, and the admin
+        // report already accounts for it.
         $this->assertCount(0, claimable::list_for_user($user->id));
+        $this->assertSame(0, claimable::count_visible_for_user($user->id));
+    }
+
+    public function test_the_list_puts_what_the_learner_can_act_on_first(): void {
+        $user = $this->getDataGenerator()->create_user();
+        foreach (['k-claimed', 'k-processing', 'k-issued'] as $key) {
+            claimable::record_candidate($user->id, $key, null, null);
+        }
+        claimable::apply_remote_status($this->row($user->id, 'k-claimed'), 'claimed');
+        claimable::apply_remote_status($this->row($user->id, 'k-issued'), 'issued');
+
+        $keys = array_values(array_map(
+            fn($r) => $r->credentialkey,
+            claimable::list_for_user($user->id)
+        ));
+
+        $this->assertSame(['k-issued', 'k-processing', 'k-claimed'], $keys);
+    }
+
+    public function test_a_user_with_nothing_tracked_has_nothing_to_show(): void {
+        $user = $this->getDataGenerator()->create_user();
+
+        // Drives whether the user-menu entry appears at all: a learner who has never
+        // been issued a credential must not get one.
+        $this->assertSame(0, claimable::count_visible_for_user($user->id));
+    }
+
+    public function test_the_reported_credential_id_is_stored_for_the_wallet_link(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued', 'cred-abc');
+
+        // Without it there is no way to point a learner at the credential in the wallet.
+        $this->assertSame('cred-abc', $this->row($user->id, 'key-1')->credentialid);
+    }
+
+    public function test_a_poll_without_a_credential_id_does_not_erase_a_known_one(): void {
+        $user = $this->getDataGenerator()->create_user();
+        claimable::record_candidate($user->id, 'key-1', null, null);
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued', 'cred-abc');
+
+        // The API omits credentialId while a request is still processing; a later
+        // answer that leaves it out says nothing about the value already known.
+        claimable::apply_remote_status($this->row($user->id, 'key-1'), 'claimed', null);
+
+        $this->assertSame('cred-abc', $this->row($user->id, 'key-1')->credentialid);
     }
 
     public function test_cache_is_invalidated_on_status_change(): void {
@@ -181,7 +244,8 @@ final class claimable_test extends \advanced_testcase {
         // credential nor signal a claim-me moment for something already claimed.
         $this->assertFalse(claimable::apply_remote_status($stalesnapshot, 'issued'));
         $this->assertSame('claimed', $this->row($user->id, 'key-1')->remotestatus);
-        $this->assertCount(0, claimable::list_for_user((int) $user->id));
+        // Still listed (claimed credentials are), but as claimed, not as claimable.
+        $this->assertSame(0, claimable::count_claimable_for_user((int) $user->id));
 
         // The same for a late lock-free tier-1 write ("processing" arriving late).
         $this->assertFalse(claimable::apply_remote_status($stalesnapshot, 'processing'));

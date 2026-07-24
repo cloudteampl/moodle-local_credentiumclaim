@@ -29,20 +29,23 @@ use local_credentiumclaim\local\claimable;
 use local_credentiumclaim\local\status_refresher;
 
 require_login();
-$context = context_user::instance($USER->id);
-require_capability('local/credentiumclaim:claim', $context);
+require_capability('local/credentiumclaim:claim', context_user::instance($USER->id));
 
 $PAGE->set_url(new moodle_url('/local/credentiumclaim/mycredentials.php'));
-$PAGE->set_context($context);
+// System context on purpose. A user context makes Moodle draw its profile header
+// above the page — avatar, full name and a "Message" button — so a page about your
+// own credentials ended up offering to message yourself. (Core's badges/mybadges.php
+// does use a user context and inherits exactly that; it is not a pattern worth
+// copying here.) The capability is still checked against the user context above; the
+// page context only decides what gets drawn. The page's own name is the heading, so
+// it is rendered once, by the layout.
+$PAGE->set_context(context_system::instance());
 $PAGE->set_pagelayout('standard');
 $PAGE->set_title(get_string('mycredentials', 'local_credentiumclaim'));
-// The user's name, as on every other user-context page (e.g. Notifications):
-// the block below already prints the page's own heading, and repeating it here
-// would render the title twice.
-$PAGE->set_heading(fullname($USER));
+$PAGE->set_heading(get_string('mycredentials_heading', 'local_credentiumclaim'));
+$PAGE->navbar->add(get_string('mycredentials', 'local_credentiumclaim'));
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('mycredentials_heading', 'local_credentiumclaim'));
 
 if (!local_credentiumclaim_is_enabled()) {
     echo $OUTPUT->notification(
@@ -102,6 +105,19 @@ if (empty($rows)) {
                 ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']
             );
             $action .= html_writer::end_tag('form');
+        } else if ($row->remotestatus === claimable::STATUS_CLAIMED) {
+            // A claimed credential lives in the wallet, so the useful action is to go
+            // and look at it. The link needs the credential's id and the wallet's
+            // address; without either, the row still says "Claimed" rather than
+            // offering a button that would land the learner nowhere.
+            $walleturl = local_credentiumclaim_wallet_credential_url($row->credentialid ?? null);
+            $action = ($walleturl === null)
+                ? html_writer::span($statuslabel, 'text-muted')
+                : html_writer::link(
+                    $walleturl,
+                    get_string('openwallet', 'local_credentiumclaim'),
+                    ['class' => 'btn btn-outline-primary btn-sm', 'target' => '_blank', 'rel' => 'noopener']
+                );
         } else {
             $action = html_writer::span($statuslabel, 'text-muted');
         }

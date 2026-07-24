@@ -35,6 +35,9 @@ class claimable {
     /** @var string Cache-key prefix for the dismiss-independent claimable count. */
     private const ALL_CACHE_PREFIX = 'all';
 
+    /** @var string Cache-key prefix for the count of credentials the page will list. */
+    private const VISIBLE_CACHE_PREFIX = 'visible';
+
     /** @var string Remote status: still being issued. */
     public const STATUS_PROCESSING = 'processing';
     /** @var string Remote status: issued and ready to claim. */
@@ -88,6 +91,49 @@ class claimable {
     }
 
     /**
+     * Cached count of credentials the "My credentials" page would list for a user.
+     *
+     * Drives whether the page is reachable at all. Counting only *claimable*
+     * credentials made the user-menu entry vanish the moment a learner claimed the
+     * last one — taking away the only route back to the credentials they had just
+     * collected. Learners who have never been issued anything still see no entry.
+     *
+     * @param int $userid User id.
+     * @return int
+     */
+    public static function count_visible_for_user(int $userid): int {
+        $cache = \cache::make('local_credentiumclaim', 'claimable');
+        $key = self::VISIBLE_CACHE_PREFIX . $userid;
+        $cached = $cache->get($key);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+        $count = self::query_visible_count($userid);
+        $cache->set($key, $count);
+        return $count;
+    }
+
+    /**
+     * Uncached count of the rows {@see self::list_for_user()} would return.
+     *
+     * @param int $userid User id.
+     * @return int
+     */
+    protected static function query_visible_count(int $userid): int {
+        global $DB;
+        try {
+            return $DB->count_records_select(
+                self::TABLE,
+                'userid = :userid AND remotestatus <> :failed',
+                ['userid' => $userid, 'failed' => self::STATUS_FAILED]
+            );
+        } catch (\dml_exception $e) {
+            // Never break page rendering because of this plugin.
+            return 0;
+        }
+    }
+
+    /**
      * Uncached count of issued (claimable) credentials, ignoring dismissal.
      *
      * @param int $userid User id.
@@ -128,18 +174,39 @@ class claimable {
     }
 
     /**
-     * All non-terminal credentials for a user (for the "My credentials" page).
+     * Everything the "My credentials" page shows a user.
+     *
+     * Includes claimed credentials: hiding them turned the page into a to-do list
+     * that emptied itself, so a learner who had collected everything was told they
+     * had nothing — and had no way back to what they had just earned. Failed
+     * issuances stay out: the learner can do nothing about one, and the admin
+     * report already accounts for them.
+     *
+     * Ordered by what the learner can act on: ready to claim first, then still
+     * processing, then the collected ones, each group most-recent first.
      *
      * @param int $userid User id.
-     * @return \stdClass[] Rows ordered most-recent first.
+     * @return \stdClass[] Rows in display order.
      */
     public static function list_for_user(int $userid): array {
         global $DB;
+        // CASE rather than a PHP sort: the ordering is part of the query's contract,
+        // and the row count here is per-user and small either way.
+        $order = "CASE remotestatus
+                       WHEN :issuedorder THEN 0
+                       WHEN :claimedorder THEN 2
+                       ELSE 1
+                  END ASC, timemodified DESC";
         return $DB->get_records_select(
             self::TABLE,
-            'userid = :userid AND remotestatus <> :claimed AND remotestatus <> :failed',
-            ['userid' => $userid, 'claimed' => self::STATUS_CLAIMED, 'failed' => self::STATUS_FAILED],
-            'timemodified DESC'
+            'userid = :userid AND remotestatus <> :failed',
+            [
+                'userid' => $userid,
+                'failed' => self::STATUS_FAILED,
+                'issuedorder' => self::STATUS_ISSUED,
+                'claimedorder' => self::STATUS_CLAIMED,
+            ],
+            $order
         );
     }
 
@@ -257,13 +324,16 @@ class claimable {
      *
      * @param \stdClass $row Existing row (must include id and userid).
      * @param string $status Raw Credentium status.
+     * @param string|null $credentialid Credentium credentialId, when the poll reported one.
      * @return bool True when the credential has just become claimable (a fresh
      *              transition into "issued"), so the caller can notify the learner once.
      */
-    public static function apply_remote_status(\stdClass $row, string $status): bool {
+    public static function apply_remote_status(\stdClass $row, string $status, ?string $credentialid = null): bool {
         global $DB;
         $normalized = self::normalize_status($status);
         $snapshot = $row->remotestatus ?? null;
+
+        self::remember_credential_id($row, $credentialid);
 
         if ($normalized !== self::STATUS_ISSUED) {
             // Tier 1: never a claim-me moment, regardless of races. A missing
@@ -311,6 +381,31 @@ class claimable {
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Store the Credentium credentialId a poll reported, if it is news.
+     *
+     * Deliberately outside {@see self::write_status()}: the status write is a
+     * carefully guarded, monotonic statement and this value needs none of that.
+     * A credentialId is assigned once by Credentium and never changes, so a plain
+     * conditional write is both correct under the same races and cheap — no write
+     * at all in the steady state, where the row already has it.
+     *
+     * @param \stdClass $row Tracking row (must include id).
+     * @param string|null $credentialid Value reported by the API, if any.
+     * @return void
+     */
+    private static function remember_credential_id(\stdClass $row, ?string $credentialid): void {
+        global $DB;
+        if ($credentialid === null || $credentialid === '') {
+            return;
+        }
+        if (($row->credentialid ?? null) === $credentialid) {
+            return;
+        }
+        $DB->set_field(self::TABLE, 'credentialid', $credentialid, ['id' => $row->id]);
+        $row->credentialid = $credentialid;
     }
 
     /**
@@ -496,9 +591,11 @@ class claimable {
      */
     public static function purge_cache(int $userid): void {
         $cache = \cache::make('local_credentiumclaim', 'claimable');
-        // Both the dismiss-aware (banner) and dismiss-independent (menu) counts.
+        // The dismiss-aware (banner), dismiss-independent (menu badge) and
+        // page-reachability counts all move together.
         $cache->delete($userid);
         $cache->delete(self::ALL_CACHE_PREFIX . $userid);
+        $cache->delete(self::VISIBLE_CACHE_PREFIX . $userid);
     }
 
     /**
