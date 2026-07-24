@@ -39,5 +39,17 @@ function xmldb_local_credentiumclaim_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072300, 'local', 'credentiumclaim');
     }
 
+    if ($oldversion < 2026072400) {
+        // The banner toggle lives on a custom moodleform, so its default was never
+        // persisted: sites that enabled the plugin without re-saving that form had
+        // showbanner unset, and the banner hook read that as "off". Persist the
+        // documented default (on) without touching an explicit admin choice.
+        if (get_config('local_credentiumclaim', 'showbanner') === false) {
+            set_config('showbanner', 1, 'local_credentiumclaim');
+        }
+
+        upgrade_plugin_savepoint(true, 2026072400, 'local', 'credentiumclaim');
+    }
+
     return true;
 }

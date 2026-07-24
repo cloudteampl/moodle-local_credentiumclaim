@@ -228,7 +228,14 @@ class claimable {
     /**
      * Apply a freshly polled remote status to a tracking row.
      *
-     * @param \stdClass $row Existing row (must include id, userid, remotestatus).
+     * Two writers can race here: the cron sync and the page-load refresher both
+     * follow "read row, ask the API, apply". The transition decision is therefore
+     * made against the status re-read from the database under a per-row lock —
+     * never against the caller's (possibly stale) snapshot — so exactly one of
+     * two concurrent writers can ever observe the transition into "issued" and
+     * notify. The caller's $row only needs id and userid.
+     *
+     * @param \stdClass $row Existing row (must include id and userid).
      * @param string $status Raw Credentium status.
      * @return bool True when the credential has just become claimable (a fresh
      *              transition into "issued"), so the caller can notify the learner once.
@@ -236,20 +243,39 @@ class claimable {
     public static function apply_remote_status(\stdClass $row, string $status): bool {
         global $DB;
         $normalized = self::normalize_status($status);
-        $now = time();
-        $DB->update_record(self::TABLE, (object) [
-            'id' => $row->id,
-            'remotestatus' => $normalized,
-            'timechecked' => $now,
-            'timemodified' => $now,
-        ]);
-        $changed = ($row->remotestatus !== $normalized);
-        if ($changed) {
-            self::purge_cache((int) $row->userid);
+
+        $factory = \core\lock\lock_config::get_lock_factory('local_credentiumclaim_status');
+        // Held for milliseconds; the short max lifetime just stops a killed process
+        // from wedging this row for the default 24h on DB/Redis lock factories.
+        $lock = $factory->get_lock('row_' . (int) $row->id, 3, 60);
+        if (!$lock) {
+            // Another process is applying a status to this row right now; its
+            // result is at least as fresh as ours, so leave the outcome to it.
+            return false;
         }
-        // Only a genuine transition into "issued" is a claim-me moment; polling an
-        // already-issued row again (issued -> issued) must not re-notify.
-        return $changed && $normalized === self::STATUS_ISSUED;
+        try {
+            $current = $DB->get_field(self::TABLE, 'remotestatus', ['id' => $row->id]);
+            if ($current === false) {
+                // The row vanished (e.g. the user was deleted mid-poll).
+                return false;
+            }
+            $now = time();
+            $DB->update_record(self::TABLE, (object) [
+                'id' => $row->id,
+                'remotestatus' => $normalized,
+                'timechecked' => $now,
+                'timemodified' => $now,
+            ]);
+            $changed = ($current !== $normalized);
+            if ($changed) {
+                self::purge_cache((int) $row->userid);
+            }
+            // Only a genuine transition into "issued" is a claim-me moment; polling an
+            // already-issued row again (issued -> issued) must not re-notify.
+            return $changed && $normalized === self::STATUS_ISSUED;
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
@@ -315,6 +341,27 @@ class claimable {
             ['userid' => $userid, 'status' => self::STATUS_ISSUED]
         );
         self::purge_cache($userid);
+    }
+
+    /**
+     * Ask for this row to be re-polled at the next opportunity.
+     *
+     * Zeroing `timechecked` makes the row look maximally stale, so the page-load
+     * refresher picks it up immediately instead of honouring its usual per-row
+     * throttle. Used right after a claim link is minted: the learner is about to
+     * claim, and the next look at "My credentials" should reflect that promptly.
+     *
+     * @param int $userid User id.
+     * @param int $rowid Row id.
+     * @return void
+     */
+    public static function request_recheck(int $userid, int $rowid): void {
+        global $DB;
+        $row = self::get_owned_row($userid, $rowid);
+        if ($row === null) {
+            return;
+        }
+        $DB->update_record(self::TABLE, (object) ['id' => $row->id, 'timechecked' => 0]);
     }
 
     /**

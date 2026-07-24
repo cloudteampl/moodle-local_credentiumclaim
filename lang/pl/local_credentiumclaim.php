@@ -61,6 +61,7 @@ $string['error:notconfigured'] = 'Credentium® Claim nie jest skonfigurowany. Sp
 $string['globalsettings'] = 'Ustawienia Credentium® Claim';
 $string['message_ready_body'] = 'Credentium® wystawił Ci poświadczenie cyfrowe gotowe do odebrania. Otwórz „Moje poświadczenia”, aby zapisać je w swoim Portfelu Credentium®.';
 $string['message_ready_body_course'] = 'Credentium® wystawił Ci poświadczenie cyfrowe za „{$a->course}” gotowe do odebrania. Otwórz „Moje poświadczenia”, aby zapisać je w swoim Portfelu Credentium®.';
+$string['message_ready_linktext'] = 'Przejdź do moich poświadczeń';
 $string['message_ready_small'] = 'Masz poświadczenie Credentium® gotowe do odebrania.';
 $string['message_ready_subject'] = 'Masz poświadczenie do odebrania';
 $string['messageprovider:credentialready'] = 'Poświadczenie cyfrowe jest gotowe do odebrania';

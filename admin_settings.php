@@ -33,8 +33,8 @@ $mform = new \local_credentiumclaim\form\admin_settings_form();
 
 $config = new stdClass();
 $config->enabled = get_config('local_credentiumclaim', 'enabled');
-$showbanner = get_config('local_credentiumclaim', 'showbanner');
-$config->showbanner = ($showbanner === false) ? 1 : $showbanner;
+// Same unset-means-on default the banner hook applies at render time.
+$config->showbanner = local_credentiumclaim_show_banner() ? 1 : 0;
 $config->debuglog = get_config('local_credentiumclaim', 'debuglog');
 // Null means the cron schedule was hand-edited; '' selects the "custom" option.
 $config->syncinterval = local_credentiumclaim_get_sync_interval() ?? '';

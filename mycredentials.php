@@ -26,6 +26,7 @@ require_once(__DIR__ . '/../../config.php');
 require_once(__DIR__ . '/lib.php');
 
 use local_credentiumclaim\local\claimable;
+use local_credentiumclaim\local\status_refresher;
 
 require_login();
 $context = context_user::instance($USER->id);
@@ -35,7 +36,10 @@ $PAGE->set_url(new moodle_url('/local/credentiumclaim/mycredentials.php'));
 $PAGE->set_context($context);
 $PAGE->set_pagelayout('standard');
 $PAGE->set_title(get_string('mycredentials', 'local_credentiumclaim'));
-$PAGE->set_heading(get_string('mycredentials_heading', 'local_credentiumclaim'));
+// The user's name, as on every other user-context page (e.g. Notifications):
+// the block below already prints the page's own heading, and repeating it here
+// would render the title twice.
+$PAGE->set_heading(fullname($USER));
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('mycredentials_heading', 'local_credentiumclaim'));
@@ -48,6 +52,11 @@ if (!local_credentiumclaim_is_enabled()) {
     echo $OUTPUT->footer();
     die();
 }
+
+// Bring stale statuses up to date before rendering, so a credential the learner
+// claimed in Credentium moments ago does not still offer a "Claim" button here.
+// Bounded, throttled and silent on failure — see status_refresher.
+(new status_refresher())->refresh_for_user((int) $USER->id);
 
 $rows = claimable::list_for_user($USER->id);
 

@@ -75,6 +75,10 @@ if (!local_credentiumclaim_is_enabled()) {
                     if (!empty($result->claimurl)) {
                         // The user has acted on this credential: stop nagging via the banner.
                         claimable::dismiss($USER->id, (int) $row->id);
+                        // The learner is about to claim in Credentium: flag the row so the
+                        // next "My credentials" view re-polls it immediately instead of
+                        // waiting out the refresher's throttle (or the next cron run).
+                        claimable::request_recheck($USER->id, (int) $row->id);
                         // Hand the single-use URL straight to the browser; never render or log it.
                         redirect($result->claimurl);
                     }
@@ -99,9 +103,33 @@ if (!local_credentiumclaim_is_enabled()) {
             }
         }
     } catch (moodle_exception $e) {
-        // The client already logged a sanitised summary; show a generic message.
+        // The client already logged a sanitised summary; assume a generic error.
         $message = get_string('claim_error', 'local_credentiumclaim');
         $messagetype = \core\output\notification::NOTIFY_ERROR;
+
+        // Before showing it, ask for the credential's current status once: the most
+        // common reason a mint fails is that this credential was claimed a moment
+        // ago (a second click on a stale "Claim" button), and that deserves the
+        // friendly "already claimed" answer rather than a red error box.
+        if (isset($client) && $client->is_configured()) {
+            try {
+                $statuses = $client->get_status_batch([$row->credentialkey]);
+                if (isset($statuses[$row->credentialkey])) {
+                    $remote = $statuses[$row->credentialkey]->status;
+                    claimable::apply_remote_status($row, $remote);
+                    if ($remote === claimable::STATUS_CLAIMED) {
+                        $message = get_string('claim_alreadyclaimed', 'local_credentiumclaim');
+                        $messagetype = \core\output\notification::NOTIFY_SUCCESS;
+                    } else if ($remote === claimable::STATUS_PROCESSING) {
+                        $message = get_string('claim_notready', 'local_credentiumclaim');
+                        $messagetype = \core\output\notification::NOTIFY_INFO;
+                    }
+                }
+            } catch (moodle_exception $statusfailure) {
+                // The status probe failed too: keep the generic error.
+                local_credentiumclaim_log('Post-failure status probe failed', ['rowid' => (int) $row->id]);
+            }
+        }
     }
 }
 

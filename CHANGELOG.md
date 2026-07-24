@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-24
+
+### Fixed
+- **A claimed credential no longer keeps advertising "Ready to claim".** Statuses
+  were only refreshed by cron, so after saving a credential to the wallet the
+  "My credentials" page still showed a stale *Claim* button until the next sync —
+  and clicking it produced a generic error. Now:
+  - opening "My credentials" re-polls the learner's own stale statuses live
+    (bounded, per-row throttled, 8-second timeout, and silent on failure — the
+    page always renders);
+  - clicking *Claim* flags the row for an immediate re-check, so the next look at
+    the list reflects the claim right away;
+  - if minting a claim link fails because the credential was already claimed
+    (e.g. a second click on a stale button), the learner now sees the friendly
+    *"You have already claimed this credential"* confirmation instead of a red
+    error, and the row is corrected on the spot.
+- **The reminder banner could be silently disabled forever.** The banner honoured
+  the `showbanner` setting, which lives on a custom settings form and therefore
+  was never persisted until an admin saved that form — sites that enabled the
+  plugin any other way showed no banner at all, with nothing to explain why. An
+  unset value now counts as **on** (the documented default), the default is
+  persisted on install and upgrade, and an explicit admin "off" is still honoured.
+- **The "My credentials" page rendered its title twice.** The page heading now
+  shows the learner's name (matching every other user-context page, e.g.
+  Notifications), and the content heading appears once.
+
+### Changed
+- The **"credential ready" notification is now actionable**: the message body
+  carries a *Go to My credentials* link (plain-text emails spell out the URL), so
+  a learner can jump straight to the claim page from the bell popup or email.
+
 ## [1.2.0] - 2026-07-23
 
 ### Added
@@ -101,6 +132,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Release pipeline (`deploy.sh` + GitHub Actions) and a `moodle-plugin-ci`
   workflow covering Moodle 4.5 and 5.0.
 
+[1.3.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.3.0
 [1.2.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.1.0
 [1.0.0]: https://github.com/cloudteampl/moodle-local_credentiumclaim/releases/tag/v1.0.0
