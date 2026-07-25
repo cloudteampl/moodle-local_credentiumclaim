@@ -67,10 +67,13 @@ local_credentium                 local_credentiumclaim
    Credentium for a **single-use claim link** and opens it in a new tab. The link
    either creates a Credentium Wallet account or logs the learner in, then lands
    on the credential. Once claimed, the next status sync clears the reminder.
-4. **Afterwards.** A claimed credential stays on "My credentials" with an **Open
-   in wallet** button, so the page is a record of what a learner has earned rather
-   than a to-do list that empties itself. The user-menu entry likewise stays put
-   once the count reaches zero — it just drops the count.
+4. **Afterwards.** A claimed credential stays on "My credentials" with a **View in
+   wallet** button, so the page is a record of what a learner has earned rather
+   than a to-do list that empties itself. That button uses the same mechanism as
+   *Claim* — the plugin asks the API for a link and opens the `claimUrl` it returns
+   — so it lands the learner on the credential in their private wallet (a view, not
+   a re-claim). The user-menu entry likewise stays put once the count reaches
+   zero — it just drops the count.
 
 ## Security & privacy
 
@@ -95,7 +98,6 @@ Site administration → Plugins → Local plugins → **Credentium® Claim**:
 | API connection | **Read-only.** Endpoint and key inherited from the Credentium® Integration plugin. |
 | Status check interval | How often the sync task runs (5 min – 4 h). Rewrites the task's cron schedule. |
 | Show reminder banner | Whether to show the top-of-page banner. |
-| Credentium® Wallet address | Base address of the wallet, where claimed credentials link to. Normally left empty — see below. |
 | Enable debug logging | Writes secret-free diagnostics to the server log. |
 
 There is deliberately **no API URL or API key field here.** Both are inherited
@@ -112,32 +114,20 @@ If the connector runs in **category mode**, each tracked credential is checked
 using the credentials that apply to its course, and the sync issues one batch
 call per distinct key.
 
-### The wallet address
+### Wallet links come from the API, never from this plugin
 
-Opening a credential a learner has already claimed needs the address of the
-Credentium® Wallet, and the API has no endpoint that states it. It does, however,
-give it away every time it mints a claim link, whose URL points into the wallet —
-so the plugin **learns** it from the first claim that goes through Moodle and
-stores the origin (scheme, host, port). Only the origin: the rest of a claim URL
-is a single-use, bearer-equivalent secret, and keeping just the origin is what
-makes remembering it safe.
+The plugin never composes a wallet URL. Every link into the wallet — for *Claim*
+and for *View in wallet* alike — is obtained by asking the API for a claim link
+(`POST /api/credential-issue-requests/{id}/claim-link`) and using the `claimUrl`
+it returns, unchanged. There is nothing to configure: no wallet address is stored
+or guessed. The link is minted at the moment of the click and only ever travels in
+the redirect header, so an issued credential's single-use claim URL is never
+written into a page.
 
-Leave the **Credentium® Wallet address** setting empty unless claimed credentials
-show no *Open in wallet* button. That happens on a site where nobody has ever
-claimed through Moodle (learners collected their credentials straight from the
-Credentium® email), so there was nothing to learn from. An explicit setting always
-wins over the learned value, which is also how you correct a stale one after the
-wallet moves.
-
-The link goes to the learner's **credential list** in the wallet
-(`{wallet}/my-credentials`), not to the one credential. A deep link would need the
-wallet's own id for it, and the wallet is a separate system with separate keys: it
-mints that id when the credential is delivered, and no endpoint of the issuer API
-discloses it. The identifier the API does return (`credentialId`) belongs to the
-issuer's database — feeding it to the wallet's `/credentials/{id}` lands on the
-*public* page for a credential that is not public, i.e. "Unavailable". The wallet
-requires sign-in for the list and returns the learner to it afterwards, so the link
-carries no secret and always resolves.
+Earlier releases (1.5.0–1.5.1) tried to build a wallet URL from a stored address;
+that was the wrong approach and is gone. The API returns a login-gated deep link
+for already-claimed credentials too, so *View in wallet* lands the learner on the
+credential in their private wallet — a view, not a re-claim.
 
 ### Required API key scopes
 

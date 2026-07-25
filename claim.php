@@ -73,11 +73,6 @@ if (!local_credentiumclaim_is_enabled()) {
                 case client::ACTION_CREATE:
                 case client::ACTION_LOGIN:
                     if (!empty($result->claimurl)) {
-                        // The claim URL points into the wallet, which is the only place
-                        // the wallet's address is ever disclosed. Keep the origin (never
-                        // the URL itself — that is a single-use secret) so this learner's
-                        // claimed credentials can be linked to afterwards.
-                        local_credentiumclaim_remember_wallet_base($result->claimurl);
                         // The user has acted on this credential: stop nagging via the banner.
                         claimable::dismiss($USER->id, (int) $row->id);
                         // The learner is about to claim in Credentium: flag the row so the
@@ -92,7 +87,14 @@ if (!local_credentiumclaim_is_enabled()) {
                     break;
 
                 case client::ACTION_ALREADY:
+                    // Already in the wallet: the API now hands back a login-gated link to
+                    // *view* it (not to claim again — the wallet fires no claim event on a
+                    // repeat visit). Keep the local state honest, then send the learner there.
                     claimable::mark_claimed($USER->id, (int) $row->id);
+                    if (!empty($result->claimurl)) {
+                        redirect($result->claimurl);
+                    }
+                    // Older issuer with no view link: a plain confirmation is the best we can do.
                     $message = get_string('claim_alreadyclaimed', 'local_credentiumclaim');
                     $messagetype = \core\output\notification::NOTIFY_SUCCESS;
                     break;

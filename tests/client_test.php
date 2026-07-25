@@ -156,6 +156,27 @@ final class client_test extends \advanced_testcase {
         $this->assertNull($res->claimurl);
     }
 
+    public function test_already_claimed_surfaces_a_view_link_when_the_api_sends_one(): void {
+        $client = $this->make_client();
+        // The issuer now returns a login-gated deep link for already-claimed
+        // credentials too, so the learner can go and look at what they collected.
+        $client->handler = fn($m, $u, $b) => [200, json_encode([
+            'actionType' => 'already_claimed',
+            'claimUrl' => 'https://wallet.example/account/login?returnUrl=%2Fmy-credentials%2Fopen%2Fabc',
+            'expiresAt' => null,
+        ]), []];
+
+        $res = $client->get_claim_link('req-2', 'en');
+
+        // The URL must be surfaced, not dropped as it was when already_claimed always
+        // meant "no link" — it is what the claim page redirects the learner to.
+        $this->assertSame(\local_credentiumclaim\api\client::ACTION_ALREADY, $res->actiontype);
+        $this->assertSame(
+            'https://wallet.example/account/login?returnUrl=%2Fmy-credentials%2Fopen%2Fabc',
+            $res->claimurl
+        );
+    }
+
     public function test_unknown_actiontype_is_normalised(): void {
         $client = $this->make_client();
         $client->handler = fn($m, $u, $b) => [200, json_encode(['actionType' => 'something_new']), []];

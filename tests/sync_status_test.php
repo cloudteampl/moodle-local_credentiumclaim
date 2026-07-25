@@ -56,7 +56,7 @@ final class sync_status_test extends \advanced_testcase {
         // Credential rq-1 is issued => banner-worthy for u1.
         $this->assertSame(1, claimable::count_for_user($u1->id));
         // Credential rq-2 is claimed => nothing left for u2 to claim, though it stays
-        // on their page so they can open it in the wallet again.
+        // on their page with a "View in wallet" action.
         $this->assertSame(0, claimable::count_for_user($u2->id));
         $this->assertCount(1, claimable::list_for_user($u2->id));
     }
@@ -72,8 +72,8 @@ final class sync_status_test extends \advanced_testcase {
             ['rq-1' => 'cred-1']
         ));
 
-        // The page links a claimed credential to its page in the wallet, which needs
-        // the credential's own id — not the issue-request id we poll with.
+        // Stored for traceability: it names the credential itself, not the request we
+        // poll with, so a support query can be tied to Credentium's own records.
         $row = $DB->get_record(claimable::TABLE, ['credentialkey' => 'rq-1'], '*', MUST_EXIST);
         $this->assertSame('cred-1', $row->credentialid);
     }

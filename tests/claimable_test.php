@@ -109,13 +109,13 @@ final class claimable_test extends \advanced_testcase {
         $this->assertSame(0, claimable::count_visible_for_user($user->id));
     }
 
-    public function test_the_reported_credential_id_is_stored_for_the_wallet_link(): void {
+    public function test_the_reported_credential_id_is_stored_for_traceability(): void {
         $user = $this->getDataGenerator()->create_user();
         claimable::record_candidate($user->id, 'key-1', null, null);
 
         claimable::apply_remote_status($this->row($user->id, 'key-1'), 'issued', 'cred-abc');
 
-        // Without it there is no way to point a learner at the credential in the wallet.
+        // Kept so a Moodle row can be correlated with Credentium's own credential record.
         $this->assertSame('cred-abc', $this->row($user->id, 'key-1')->credentialid);
     }
 

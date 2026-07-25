@@ -68,5 +68,15 @@ function xmldb_local_credentiumclaim_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026072403, 'local', 'credentiumclaim');
     }
 
+    if ($oldversion < 2026072405) {
+        // The plugin no longer composes wallet URLs itself: it mints them through the
+        // API and consumes the returned claimUrl. The learned/configured wallet address
+        // is therefore dead config — drop it so nothing lingers that is never read.
+        unset_config('walleturl', 'local_credentiumclaim');
+        unset_config('walletbaselearned', 'local_credentiumclaim');
+
+        upgrade_plugin_savepoint(true, 2026072405, 'local', 'credentiumclaim');
+    }
+
     return true;
 }

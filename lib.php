@@ -172,96 +172,35 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
 }
 
 /**
- * Base address of the Credentium Wallet, used to link a claimed credential to it.
+ * A "My credentials" action button that mints its URL server-side via claim.php.
  *
- * The API never states this address outright — there is no endpoint for it — but it
- * gives it away every time it mints a claim link, whose URL points into the wallet.
- * So the plugin learns it (see {@see local_credentiumclaim_remember_wallet_base()})
- * instead of asking an administrator to type in a value the system already knows.
- * The manual setting exists only for the case learning cannot cover: a site whose
- * learners have never claimed through Moodle, so no claim link has ever been seen.
+ * The button POSTs (with sesskey) to claim.php, which asks the API for a fresh claim
+ * link and redirects to it. The link is minted at click time and only ever travels in
+ * the redirect header, so an issued credential's single-use claim URL is never written
+ * into the page. Both the "claim it" and the "view the claimed one" actions share this
+ * form — they differ only in the label and emphasis.
  *
- * @return string|null Origin with no trailing slash, or null when it is not known yet.
+ * @param int $rowid Tracking row id.
+ * @param string $labelkey Language string id for the button label.
+ * @param string $buttonclass Bootstrap button variant class (e.g. 'btn-primary').
+ * @return string HTML for the button.
  */
-function local_credentiumclaim_wallet_base_url() {
-    $configured = trim((string) get_config('local_credentiumclaim', 'walleturl'));
-    if ($configured !== '') {
-        // Held to the same http(s) rule as a learned address. PARAM_URL on the
-        // settings field is broader than that (it would pass ftp:, mailto:), and this
-        // value ends up in an href on a learner's page, so the narrower rule is
-        // applied where the value is read rather than only where it is written.
-        return local_credentiumclaim_http_origin($configured) !== null ? rtrim($configured, '/') : null;
-    }
-    $learned = trim((string) get_config('local_credentiumclaim', 'walletbaselearned'));
-    return $learned !== '' ? $learned : null;
-}
-
-/**
- * The http(s) origin of a URL: scheme, host and port, and nothing else.
- *
- * @param string $url Any URL.
- * @return string|null Null unless it is an absolute http or https URL.
- */
-function local_credentiumclaim_http_origin($url) {
-    $parts = parse_url((string) $url);
-    if (empty($parts['scheme']) || empty($parts['host'])) {
-        return null;
-    }
-    if (!in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
-        return null;
-    }
-    $origin = strtolower($parts['scheme']) . '://' . $parts['host'];
-    if (!empty($parts['port'])) {
-        $origin .= ':' . ((int) $parts['port']);
-    }
-    return $origin;
-}
-
-/**
- * Learn the wallet's address from a freshly minted claim URL.
- *
- * Stores the origin only — scheme, host and port. The rest of a claim URL is a
- * single-use, bearer-equivalent secret and must never be persisted; keeping just the
- * origin is what makes remembering it safe at all.
- *
- * @param string $claimurl A claim URL returned by the API.
- * @return void
- */
-function local_credentiumclaim_remember_wallet_base($claimurl) {
-    $origin = local_credentiumclaim_http_origin($claimurl);
-    if ($origin === null) {
-        return;
-    }
-    $previous = (string) get_config('local_credentiumclaim', 'walletbaselearned');
-    if ($origin === $previous) {
-        return;
-    }
-    // This value is site-wide: it decides where every learner's "Open in wallet"
-    // button points. It is only ever taken from an address the API itself handed us,
-    // but a change is worth a trace so an unexpected one can be accounted for.
-    local_credentiumclaim_log('Wallet address learned', ['from' => $previous, 'to' => $origin]);
-    set_config('walletbaselearned', $origin, 'local_credentiumclaim');
-}
-
-/**
- * Link to the learner's credential list in the Credentium Wallet.
- *
- * Deliberately the list rather than one credential. A deep link would need the
- * wallet's own id for that credential, and the wallet is a separate system with its
- * own keys: it mints that id when the credential is delivered, and no endpoint of
- * the issuer API ever discloses it. The identifier the API does return
- * (`credentialId`) belongs to the issuer's database and means nothing to the wallet
- * — pointing a learner at `/credentials/{that}` lands them on the wallet's *public*
- * page for a credential that is not public, which is the "Unavailable" screen.
- *
- * The wallet requires authentication for this page and returns the learner to it
- * after signing in, so the link carries no secret and always resolves.
- *
- * @return \moodle_url|null Null when the wallet address is not known.
- */
-function local_credentiumclaim_wallet_url() {
-    $base = local_credentiumclaim_wallet_base_url();
-    return $base === null ? null : new moodle_url($base . '/my-credentials');
+function local_credentiumclaim_action_button(int $rowid, string $labelkey, string $buttonclass) {
+    $out = html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => (new moodle_url('/local/credentiumclaim/claim.php'))->out(false),
+        'target' => '_blank',
+        'class' => 'm-0',
+    ]);
+    $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $rowid]);
+    $out .= html_writer::tag(
+        'button',
+        get_string($labelkey, 'local_credentiumclaim'),
+        ['type' => 'submit', 'class' => 'btn ' . $buttonclass . ' btn-sm']
+    );
+    $out .= html_writer::end_tag('form');
+    return $out;
 }
 
 /**
