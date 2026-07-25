@@ -1,5 +1,24 @@
 # Credentium® Claim (`local_credentiumclaim`)
 
+> ## ⚠️ DEPRECATED — functionality absorbed into Credentium® Integration ≥ 3.0.0
+>
+> As of **2026-07-25** this plugin is no longer developed or supported. Its entire
+> functionality (claim status tracking, learner reminders, the "My credentials"
+> page and one-click claiming) is **built into the
+> [Credentium® Integration](https://github.com/cloudteampl/moodle-local_credentium)
+> plugin from version 3.0.0**, which is the single plugin to install going forward.
+>
+> **Migration is automatic:** upgrade `local_credentium` to ≥ 3.0.0 on a site that
+> runs this plugin — the upgrade migrates all tracking data (claim statuses,
+> banner dismissals, check timestamps; nobody gets re-notified) and this plugin's
+> settings, then disables this plugin. Afterwards **uninstall
+> `local_credentiumclaim`** under Site administration → Plugins → Plugins overview.
+> Only the status check interval must be re-selected if you had customised it.
+>
+> This repository is archived and kept read-only for reference. Please report any
+> issues against
+> [`moodle-local_credentium`](https://github.com/cloudteampl/moodle-local_credentium/issues).
+
 A Moodle **local** plugin that tells learners, inside the Moodle UI, when they
 have an issued-but-unclaimed Credentium® digital credential — and lets them claim
 it in a couple of clicks.
