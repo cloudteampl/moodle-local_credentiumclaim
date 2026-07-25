@@ -185,11 +185,14 @@ function local_credentiumclaim_apply_sync_interval($minutes) {
  * @param string $buttonclass Bootstrap button variant class (e.g. 'btn-primary').
  * @return string HTML for the button.
  */
-function local_credentiumclaim_action_button(int $rowid, string $labelkey, string $buttonclass) {
+function local_credentiumclaim_action_button(int $rowid, string $labelkey, string $buttonclass): string {
     $out = html_writer::start_tag('form', [
         'method' => 'post',
         'action' => (new moodle_url('/local/credentiumclaim/claim.php'))->out(false),
         'target' => '_blank',
+        // The new tab is redirected to the external wallet origin; noopener stops it
+        // from reaching back into this page through window.opener.
+        'rel' => 'noopener',
         'class' => 'm-0',
     ]);
     $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
