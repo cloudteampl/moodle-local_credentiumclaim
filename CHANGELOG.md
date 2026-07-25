@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-07-25
+
+### Fixed
+- **"Open in wallet" now opens the credential itself.** 1.5.0/1.5.1 tried to link
+  claimed credentials into the wallet, first by composing a URL from the credential
+  id (which hit the wallet's public page → "Unavailable"), then by linking to the
+  wallet's credential list. Both were the plugin guessing at a wallet address it
+  should never have been reconstructing. The right pattern is the one the "Claim"
+  button already used: ask the API for a claim link and use the `claimUrl` it
+  returns, untouched. After a matching issuer fix, that endpoint now returns a
+  login-gated deep link for already-claimed credentials too — so a claimed row's
+  **View in wallet** button lands the signed-in learner straight on the credential
+  in their private wallet (a view, not a re-claim). Because the link is minted
+  through the API at click time, it also works for credentials claimed before this
+  release, needs no configuration, and is never a stale guess.
+
+### Changed
+- **Removed the wallet-address machinery entirely.** The learned `walletbaselearned`
+  value, the **Credentium® Wallet address** setting, and the URL-composing helpers
+  in `lib.php` are all gone: the plugin no longer knows or stores where the wallet
+  is. It mints every wallet link through the API and consumes the returned
+  `claimUrl` — the URL is built by Credentium, never by this plugin. The orphaned
+  config is removed on upgrade.
+- The `credentialid` column is retained purely for traceability (correlating a
+  Moodle row with Credentium's own credential record); no link is built from it.
+
 ## [1.5.1] - 2026-07-24
 
 ### Fixed

@@ -99,38 +99,17 @@ if (empty($rows)) {
 
         $statuslabel = get_string('status_' . $row->remotestatus, 'local_credentiumclaim');
 
+        // Issued and claimed rows both act through claim.php, which mints the URL from
+        // the API at click time and redirects to it — the URL (a single-use secret for
+        // an issued credential) is never rendered into this page. Only the label and
+        // emphasis differ: "Claim" for something to collect, "View in wallet" for
+        // something already collected. Processing and any other state offer no action.
         if ($row->remotestatus === claimable::STATUS_ISSUED) {
-            $action = html_writer::start_tag('form', [
-                'method' => 'post',
-                'action' => (new moodle_url('/local/credentiumclaim/claim.php'))->out(false),
-                'target' => '_blank',
-                'class' => 'm-0',
-            ]);
-            $action .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-            $action .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $row->id]);
-            $action .= html_writer::tag(
-                'button',
-                get_string('claim', 'local_credentiumclaim'),
-                ['type' => 'submit', 'class' => 'btn btn-primary btn-sm']
-            );
-            $action .= html_writer::end_tag('form');
+            $action = local_credentiumclaim_action_button((int) $row->id, 'claim', 'btn-primary');
         } else if ($row->remotestatus === claimable::STATUS_CLAIMED) {
-            // A claimed credential lives in the wallet, so the useful action is to go
-            // and look at it. The link goes to the wallet's credential list, not to
-            // this one credential: see local_credentiumclaim_wallet_url() for why a
-            // deep link is not something this plugin can build. Without the wallet's
-            // address the row still says "Claimed" rather than offering a button that
-            // would land the learner nowhere.
-            $walleturl = local_credentiumclaim_wallet_url();
-            $action = ($walleturl === null)
-                ? html_writer::span($statuslabel, 'text-muted')
-                : html_writer::link(
-                    $walleturl,
-                    get_string('openwallet', 'local_credentiumclaim'),
-                    ['class' => 'btn btn-outline-primary btn-sm', 'target' => '_blank', 'rel' => 'noopener']
-                );
+            $action = local_credentiumclaim_action_button((int) $row->id, 'viewinwallet', 'btn-outline-primary');
         } else {
-            $action = html_writer::span($statuslabel, 'text-muted');
+            $action = html_writer::span('—', 'text-muted');
         }
 
         $table->data[] = [$coursename, $statuslabel, $action];
